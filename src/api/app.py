@@ -1,12 +1,26 @@
 """
 FastAPI service for local stats and health.
+Now includes WebSocket support and Celery task integration.
 """
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from typing import Optional
+import asyncio
 
-from src.db.models import SessionLocal, Wagon, BagEvent
+from src.db.models import SessionLocal, Wagon, BagEvent, Shift
+from src.config import settings
+from src.websocket.manager import get_ws_manager
+from src.tasks.tasks import (
+    send_notification_task,
+    generate_report_task,
+    update_dashboard_task,
+)
 
 app = FastAPI(title="Bag Counter Edge API")
+
+# OAuth2 scheme for token authentication
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 def get_db():
@@ -15,6 +29,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
+    """Get current authenticated user from JWT token."""
+    if not token:
+        return None
+    # Simplified: in production, validate JWT properly
+    if token == "admin_token":  # Replace with actual JWT validation
+        return "admin"
+    return None
 
 
 @app.get("/health")
@@ -42,3 +66,97 @@ def today_stats(db: Session = Depends(get_db)):
     for cls in ["25kg", "50kg", "empty"]:
         by_class[cls] = db.query(BagEvent).filter_by(bag_class=cls).count()
     return {"total_counted": total, "by_class": by_class}
+
+
+# ── WebSocket Endpoint ──────────────────────────────────────────────────────
+@app.websocket("/ws/{channel}")
+async def websocket_endpoint(websocket: WebSocket, channel: str = "general"):
+    """
+    WebSocket endpoint for real-time updates.
+    
+    Channels:
+    - general: All messages
+    - dashboard: Stats updates
+    - events: Bag detection events
+    - alerts: System alerts
+    """
+    ws_manager = get_ws_manager()
+    await ws_manager.connect(websocket, channel)
+    try:
+        while True:
+            # Keep connection alive, receive messages from client
+            data = await websocket.receive_text()
+            # Handle client commands (subscribe/unsubscribe)
+            try:
+                import json
+                msg = json.loads(data)
+                if msg.get("action") == "subscribe":
+                    await ws_manager.subscribe(websocket, msg.get("channel"))
+                elif msg.get("action") == "unsubscribe":
+                    await ws_manager.unsubscribe(websocket, msg.get("channel"))
+            except json.JSONDecodeError:
+                pass
+    except WebSocketDisconnect:
+        await ws_manager.disconnect(websocket)
+
+
+# ── Task Endpoints (Celery Integration) ─────────────────────────────────────
+@app.post("/api/v1/tasks/send-notification")
+async def trigger_notification(
+    event_type: str,
+    data: dict,
+    channels: Optional[list] = None,
+    current_user: str = Depends(get_current_user)
+):
+    """Trigger a notification via Celery task."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    task = send_notification_task.delay(event_type, data, channels)
+    return {"task_id": task.id, "status": "queued"}
+
+
+@app.post("/api/v1/tasks/generate-report/{wagon_id}")
+async def trigger_report(
+    wagon_id: int,
+    current_user: str = Depends(get_current_user)
+):
+    """Generate a wagon report via Celery task."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    task = generate_report_task.delay(wagon_id)
+    return {"task_id": task.id, "status": "queued"}
+
+
+@app.post("/api/v1/tasks/update-dashboard")
+async def trigger_dashboard_update(
+    wagon_id: Optional[int] = None,
+    current_user: str = Depends(get_current_user)
+):
+    """Update dashboard stats via Celery task."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    task = update_dashboard_task.delay(wagon_id)
+    result = task.get(timeout=10)  # Wait for result
+    return result
+
+
+# ── Broadcast Helpers ──────────────────────────────────────────────────────
+async def broadcast_bag_event(event_data: dict):
+    """Broadcast a bag detection event to connected clients."""
+    ws_manager = get_ws_manager()
+    await ws_manager.broadcast_event(event_data)
+
+
+async def broadcast_stats(stats: dict):
+    """Broadcast updated statistics to dashboard clients."""
+    ws_manager = get_ws_manager()
+    await ws_manager.broadcast_stats(stats)
+
+
+async def broadcast_alert(alert_data: dict):
+    """Broadcast an alert to all connected clients."""
+    ws_manager = get_ws_manager()
+    await ws_manager.broadcast_alert(alert_data)

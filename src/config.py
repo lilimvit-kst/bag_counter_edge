@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     NOTIFY_ON_WAGON_CLOSE: bool = True
     NOTIFY_ON_LOW_STOCK: bool = False
     LOW_STOCK_THRESHOLD: int = 100
+    
+    # Redis / Celery
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
+    CELERY_ENABLED: bool = Field(default=False, env="CELERY_ENABLED")
+    WEBSOCKET_ENABLED: bool = Field(default=True, env="WEBSOCKET_ENABLED")
+    WEBSOCKET_PORT: int = 8765
 
     class Config:
         env_file = ".env"
