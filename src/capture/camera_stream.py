@@ -1,6 +1,6 @@
 """
-Camera capture module.
-Supports single RGB stream and optional stereo/depth pair.
+Threaded RTSP/USB capture with frame-drop policy and automatic reconnect.
+Keeps only the latest frame to minimize latency on Edge.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from src.config import settings
 
 class CameraStream:
     """
-    Threaded RTSP/USB capture with frame-drop policy.
+    Threaded RTSP/USB capture with automatic reconnect on failure.
     Keeps only the latest frame to minimize latency on Edge.
     """
 
@@ -29,12 +29,16 @@ class CameraStream:
         height: int = settings.FRAME_HEIGHT,
         fps: int = settings.FPS,
         name: str = "camera",
+        max_reconnect_attempts: int = settings.CAMERA_MAX_RECONNECT_ATTEMPTS,
+        reconnect_delay: float = settings.CAMERA_RECONNECT_DELAY,
     ) -> None:
         self.source = source
         self.width = width
         self.height = height
         self.fps = fps
         self.name = name
+        self.max_reconnect_attempts = max_reconnect_attempts
+        self.reconnect_delay = reconnect_delay
 
         self._cap: Optional[cv2.VideoCapture] = None
         self._latest_frame: Optional[np.ndarray] = None
@@ -42,11 +46,13 @@ class CameraStream:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
+        self._reconnect_attempts = 0
+        self._last_success_time: float = 0.0
 
     def start(self) -> "CameraStream":
         logger.info(f"[{self.name}] Opening stream: {self.source}")
-        self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
-        if not self._cap.isOpened():
+        self._open_capture()
+        if not self._cap or not self._cap.isOpened():
             raise RuntimeError(f"Cannot open camera stream: {self.source}")
 
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
@@ -60,16 +66,59 @@ class CameraStream:
         time.sleep(1.0)
         return self
 
+    def _open_capture(self) -> bool:
+        """Attempt to open the video capture."""
+        try:
+            self._cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+            if self._cap and self._cap.isOpened():
+                self._reconnect_attempts = 0
+                logger.info(f"[{self.name}] Stream opened successfully")
+                return True
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to open stream: {e}")
+        return False
+
+    def _reconnect(self) -> bool:
+        """Attempt to reconnect to the stream."""
+        if self._cap:
+            self._cap.release()
+            self._cap = None
+
+        if self._reconnect_attempts >= self.max_reconnect_attempts:
+            logger.error(
+                f"[{self.name}] Max reconnect attempts ({self.max_reconnect_attempts}) reached"
+            )
+            return False
+
+        self._reconnect_attempts += 1
+        logger.warning(
+            f"[{self.name}] Reconnecting... (attempt {self._reconnect_attempts}/{self.max_reconnect_attempts})"
+        )
+        time.sleep(self.reconnect_delay)
+        return self._open_capture()
+
     def _grab_loop(self) -> None:
-        while self._running and self._cap is not None:
+        """Main capture loop with automatic reconnect."""
+        while self._running:
+            if self._cap is None or not self._cap.isOpened():
+                if not self._reconnect():
+                    time.sleep(self.reconnect_delay)
+                    continue
+
             ret, frame = self._cap.read()
             if ret and frame is not None:
                 with self._lock:
                     self._latest_frame = frame
                     self._timestamp = time.time()
+                self._last_success_time = time.time()
+                self._reconnect_attempts = 0
             else:
-                logger.warning(f"[{self.name}] Frame grab failed, retrying...")
-                time.sleep(0.01)
+                logger.warning(f"[{self.name}] Frame grab failed")
+                # Check for timeout - if no successful frame for 5 seconds, trigger reconnect
+                if time.time() - self._last_success_time > 5.0:
+                    logger.error(f"[{self.name}] No frames for 5s, triggering reconnect")
+                    if not self._reconnect():
+                        time.sleep(self.reconnect_delay)
 
     def read(self) -> tuple[bool, Optional[np.ndarray], float]:
         with self._lock:
@@ -85,6 +134,7 @@ class CameraStream:
             self._thread.join(timeout=2.0)
         if self._cap:
             self._cap.release()
+            self._cap = None
         logger.info(f"[{self.name}] Stream stopped.")
 
     def __enter__(self) -> "CameraStream":
