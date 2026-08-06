@@ -1,5 +1,5 @@
 """
-Simple IOU-based tracker with Kalman filtering (conceptual ByteTrack lite).
+Simple IOU-based tracker with Kalman filtering for trajectory smoothing.
 Production-grade: swap to ultralytics.track() or real ByteTrack implementation.
 """
 from __future__ import annotations
@@ -31,6 +31,96 @@ def _box_center(b: np.ndarray) -> Tuple[float, float]:
     return ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)
 
 
+class SimpleKalmanFilter:
+    """
+    1D Kalman filter for box center position smoothing.
+    Assumes constant velocity motion along conveyor axis.
+    State: [x, y, vx, vy]
+    Measurement: [x, y]
+    """
+
+    def __init__(
+        self,
+        process_noise: float = settings.KALMAN_PROCESS_NOISE,
+        measurement_noise: float = settings.KALMAN_MEASUREMENT_NOISE,
+    ) -> None:
+        # State transition matrix (constant velocity)
+        self.F = np.array([
+            [1, 0, 1, 0],
+            [0, 1, 0, 1],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ], dtype=np.float32)
+
+        # Measurement matrix
+        self.H = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+        ], dtype=np.float32)
+
+        # Process noise covariance
+        self.Q = np.eye(4, dtype=np.float32) * process_noise
+
+        # Measurement noise covariance
+        self.R = np.eye(2, dtype=np.float32) * measurement_noise
+
+        # Error covariance
+        self.P = np.eye(4, dtype=np.float32)
+
+        # State vector
+        self.x = np.zeros(4, dtype=np.float32)
+
+        self.initialized = False
+
+    def predict(self) -> Tuple[float, float]:
+        """Predict next state and return predicted center."""
+        if not self.initialized:
+            return 0.0, 0.0
+
+        self.x = self.F @ self.x
+        self.P = self.F @ self.P @ self.F.T + self.Q
+
+        return float(self.x[0]), float(self.x[1])
+
+    def update(self, measurement: Tuple[float, float]) -> Tuple[float, float]:
+        """Update state with measurement and return smoothed center."""
+        z = np.array(measurement, dtype=np.float32)
+
+        if not self.initialized:
+            # Initialize state with first measurement
+            self.x[0] = z[0]  # x
+            self.x[1] = z[1]  # y
+            self.x[2] = 0.0   # vx
+            self.x[3] = 0.0   # vy
+            self.initialized = True
+            return z[0], z[1]
+
+        # Predict
+        x_pred = self.F @ self.x
+        P_pred = self.F @ self.P @ self.F.T + self.Q
+
+        # Innovation
+        y_innov = z - (self.H @ x_pred)[:2]
+
+        # Innovation covariance
+        S = self.H @ P_pred @ self.H.T + self.R
+
+        # Kalman gain
+        K = P_pred @ self.H.T @ np.linalg.inv(S)
+
+        # Update state
+        self.x = x_pred + K @ y_innov
+        self.P = (np.eye(4) - K @ self.H) @ P_pred
+
+        return float(self.x[0]), float(self.x[1])
+
+    def reset(self) -> None:
+        """Reset filter state."""
+        self.x = np.zeros(4, dtype=np.float32)
+        self.P = np.eye(4, dtype=np.float32)
+        self.initialized = False
+
+
 @dataclass
 class Track:
     id: int
@@ -44,11 +134,16 @@ class Track:
     volume_liters: float = 0.0
     bag_class: Optional[str] = None
     history: List[np.ndarray] = field(default_factory=list)
+    kalman: Optional[SimpleKalmanFilter] = field(default=None, repr=False)
+
+    def __post_init__(self):
+        if self.kalman is None:
+            self.kalman = SimpleKalmanFilter()
 
 
 class BagTracker:
     """
-    Lightweight tracker for conveyor-bag scenarios.
+    Lightweight tracker for conveyor-bag scenarios with Kalman filtering.
     Assumes mostly linear motion along one axis.
     """
 
@@ -64,10 +159,22 @@ class BagTracker:
         self.frame_count += 1
         assigned: set[int] = set()
 
-        # 1. Predict / age existing tracks
+        # 1. Predict / age existing tracks using Kalman filter
         for t in self.tracks.values():
             t.age += 1
             t.disappeared += 1
+            if t.kalman and t.kalman.initialized:
+                # Predict next position
+                pred_x, pred_y = t.kalman.predict()
+                # Apply prediction to bbox (keep size, move center)
+                w = t.bbox[2] - t.bbox[0]
+                h = t.bbox[3] - t.bbox[1]
+                t.bbox = np.array([
+                    pred_x - w / 2,
+                    pred_y - h / 2,
+                    pred_x + w / 2,
+                    pred_y + h / 2,
+                ], dtype=np.float32)
 
         # 2. Hungarian-ish greedy matching by IoU
         det_indices = list(range(len(detections)))
@@ -91,9 +198,20 @@ class BagTracker:
             for tid, di in matched_tracks.items():
                 det = detections[di]
                 t = self.tracks[tid]
-                # Simple alpha blend for smoothing
+                # Update Kalman filter with measurement
+                center = _box_center(det.bbox)
+                smooth_x, smooth_y = t.kalman.update(center) if t.kalman else center
+
+                # Reconstruct bbox from smoothed center
+                w = det.bbox[2] - det.bbox[0]
+                h = det.bbox[3] - det.bbox[1]
                 alpha = 0.7
-                t.bbox = alpha * det.bbox + (1 - alpha) * t.bbox
+                t.bbox = np.array([
+                    smooth_x - w / 2,
+                    smooth_y - h / 2,
+                    smooth_x + w / 2,
+                    smooth_y + h / 2,
+                ], dtype=np.float32)
                 t.hits += 1
                 t.disappeared = 0
                 t.age = 0
@@ -105,10 +223,16 @@ class BagTracker:
         for di, det in enumerate(detections):
             if di in assigned:
                 continue
+            kalman = SimpleKalmanFilter()
+            # Initialize Kalman with first detection
+            center = _box_center(det.bbox)
+            kalman.update(center)
+
             t = Track(
                 id=self.next_id,
                 bbox=det.bbox.copy(),
                 last_seen=self.frame_count,
+                kalman=kalman,
             )
             self.tracks[self.next_id] = t
             self.next_id += 1

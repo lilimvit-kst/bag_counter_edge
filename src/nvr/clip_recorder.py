@@ -1,5 +1,5 @@
 """
-NVR continuous recording and event-based clip extraction.
+NVR continuous recording and event-based clip extraction with async processing.
 Uses FFmpeg for low-overhead segmented recording.
 """
 from __future__ import annotations
@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -63,6 +64,7 @@ class ClipRecorder:
     """
     Extracts a 5-second event clip from the continuous NVR segments
     or directly from a rolling RAM buffer (simpler for Edge).
+    Uses ThreadPoolExecutor for async clip saving.
     """
 
     def __init__(self, clips_dir: Optional[Path] = None) -> None:
@@ -70,6 +72,9 @@ class ClipRecorder:
         self.clips_dir.mkdir(parents=True, exist_ok=True)
         self.pre = settings.CLIP_PREROLL_SEC
         self.post = settings.CLIP_POSTROLL_SEC
+        self.pool_size = settings.CLIP_POOL_SIZE
+        self.executor = ThreadPoolExecutor(max_workers=self.pool_size)
+        self._pending_futures: list[Future] = []
 
     def save_clip(
         self,
@@ -77,9 +82,24 @@ class ClipRecorder:
         source_path: Optional[Path] = None,
     ) -> Optional[Path]:
         """
-        Extract clip around event_ts.
+        Extract clip around event_ts asynchronously.
         If source_path is None, uses direct FFmpeg from RTSP (fallback).
+        Returns immediately; clip is saved in background.
         """
+        future = self.executor.submit(
+            self._save_clip_sync, event_ts, source_path
+        )
+        self._pending_futures.append(future)
+        # Clean up completed futures
+        self._pending_futures = [f for f in self._pending_futures if not f.done()]
+        return None  # Async operation, path will be logged
+
+    def _save_clip_sync(
+        self,
+        event_ts: float,
+        source_path: Optional[Path] = None,
+    ) -> Optional[Path]:
+        """Synchronous clip extraction (called by executor)."""
         start = max(0.0, event_ts - self.pre)
         duration = self.pre + self.post
         stamp = datetime.fromtimestamp(event_ts, tz=timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
@@ -109,3 +129,14 @@ class ClipRecorder:
         except Exception as e:
             logger.error(f"Clip extraction failed: {e}")
             return None
+
+    def shutdown(self) -> None:
+        """Wait for pending clips and shutdown executor."""
+        logger.info("Waiting for pending clip extractions...")
+        for future in self._pending_futures:
+            try:
+                future.result(timeout=10)
+            except Exception as e:
+                logger.warning(f"Clip extraction error during shutdown: {e}")
+        self.executor.shutdown(wait=True)
+        logger.info("Clip recorder shutdown complete.")

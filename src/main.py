@@ -1,5 +1,5 @@
 """
-Main CV pipeline orchestrator.
+Main CV pipeline orchestrator with notification integration.
 Runs the detector -> tracker -> volume -> tripwire -> handover loop.
 """
 from __future__ import annotations
@@ -23,11 +23,16 @@ from src.pipeline.tripwire import Tripwire
 from src.pipeline.handover_logic import HandoverLogic
 from src.nvr.clip_recorder import ClipRecorder
 from src.db.models import init_db, SessionLocal, BagEvent, BagClass, Wagon, Shift
+from src.notifications.notifier import NotificationService, build_report_from_wagon, WagonReport
 
 
 class BagCountingPipeline:
     def __init__(self) -> None:
         logger.info("Initializing Bag Counting Pipeline...")
+        
+        # Setup logging with rotation
+        self._setup_logging()
+        
         init_db()
 
         # Input
@@ -41,6 +46,7 @@ class BagCountingPipeline:
         self.tripwire = Tripwire(y_ratio=settings.TRIPWIRE_Y_RATIO)
         self.handover = HandoverLogic()
         self.clip_recorder = ClipRecorder()
+        self.notifier = NotificationService()
 
         # State
         self.frame: Optional[np.ndarray] = None
@@ -50,6 +56,31 @@ class BagCountingPipeline:
 
         # Ensure active shift/wagon exist (demo: create one if missing)
         self._ensure_shift_wagon()
+
+    def _setup_logging(self) -> None:
+        """Configure structured logging with file rotation."""
+        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Remove default handler
+        logger.remove()
+        
+        # Console handler
+        logger.add(
+            sys.stderr,
+            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+            level=settings.LOG_LEVEL,
+        )
+        
+        # File handler with rotation
+        logger.add(
+            settings.LOG_FILE_PATH,
+            rotation=settings.LOG_ROTATION_SIZE,
+            retention=f"{settings.LOG_RETENTION_DAYS} days",
+            level=settings.LOG_LEVEL,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
+        )
+        
+        logger.info(f"Logging configured: {settings.LOG_FILE_PATH}")
 
     def _ensure_shift_wagon(self) -> None:
         db = SessionLocal()
@@ -93,11 +124,8 @@ class BagCountingPipeline:
 
         # Save clip asynchronously / best-effort
         ts = time.time()
-        clip_path = self.clip_recorder.save_clip(ts)
-        if clip_path:
-            event.clip_path = str(clip_path)
-            event.clip_start_offset_sec = settings.CLIP_PREROLL_SEC
-            event.clip_end_offset_sec = settings.CLIP_POSTROLL_SEC
+        self.clip_recorder.save_clip(ts)
+        logger.debug(f"Clip extraction started for track {track.id}")
 
         db = SessionLocal()
         try:
@@ -157,7 +185,7 @@ class BagCountingPipeline:
             # 1. Detect
             detections = self.detector.predict(frame)
 
-            # 2. Track
+            # 2. Track with Kalman filtering
             tracks = self.tracker.update(detections)
 
             # 3. Volume + classify per track (once)
@@ -202,7 +230,9 @@ class BagCountingPipeline:
     def shutdown(self) -> None:
         logger.info("Shutting down pipeline...")
         self.camera.stop()
+        self.clip_recorder.shutdown()
         cv2.destroyAllWindows()
+        logger.info("Pipeline shutdown complete.")
 
 
 def main() -> None:
