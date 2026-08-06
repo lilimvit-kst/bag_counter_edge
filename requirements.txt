@@ -1,0 +1,31 @@
+# Core
+numpy>=1.24.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+python-dotenv>=1.0.0
+
+# CV / ML
+ultralytics>=8.2.0
+filterpy>=1.4.5
+scipy>=1.11.0
+
+# 3D / Depth
+open3d>=0.18.0
+
+# Backend / DB
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# Frontend (kiosk monitor)
+streamlit>=1.36.0
+
+# Video / NVR
+ffmpeg-python>=0.2.0
+
+# Utils
+loguru>=0.7.0
+orjson>=3.10.0

@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  edge-cv:
+    build: .
+    container_name: bag_counter_cv
+    restart: unless-stopped
+    # Edge PC: access host network for RTSP cameras
+    network_mode: host
+    # Or use explicit ports if host network unavailable:
+    # ports:
+    #   - "8000:8000"   # FastAPI
+    #   - "8501:8501"   # Streamlit kiosk
+    environment:
+      - PRIMARY_STREAM_URL=${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
+      - SECONDARY_STREAM_URL=${SECONDARY_STREAM_URL:-rtsp://192.168.1.101:554/stream1}
+      - FPS=${FPS:-25}
+      - DETECTION_MODEL=${DETECTION_MODEL:-yolov8n.pt}
+    volumes:
+      - ./storage:/app/storage
+      - ./models:/app/models:ro
+      - /etc/localtime:/etc/localtime:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "3.5"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Streamlit Operator Dashboard
+  dashboard:
+    build: .
+    container_name: bag_counter_dashboard
+    restart: unless-stopped
+    command: ["streamlit", "run", "src/kiosk/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./storage:/app/storage
+      - ./src:/app/src
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Optional: local NVR as separate lightweight container
+  nvr:
+    image: jrottenberg/ffmpeg:6.1-alpine
+    container_name: bag_counter_nvr
+    restart: unless-stopped
+    network_mode: host
+    command: >
+      ffmpeg -hide_banner -loglevel error
+      -rtsp_transport tcp
+      -i ${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
+      -c copy -f segment
+      -segment_time 600
+      -strftime 1
+      -reset_timestamps 1
+      /app/storage/nvr/%Y%m%d_%H%M%S.mp4
+    volumes:
+      - ./storage/nvr:/app/storage/nvr
+      - /etc/localtime:/etc/localtime:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M

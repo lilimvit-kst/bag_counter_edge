@@ -1,0 +1,49 @@
+graph TD
+    subgraph "Edge Device (Industrial PC)"
+        CAM1["IP Camera 1 (RGB)"]
+        CAM2["IP Camera 2 (Stereo/Depth)"]
+
+        subgraph "CV Pipeline (Python)"
+            CAP["Capture Module<br/>GStreamer / OpenCV"]
+            DEPTH["Depth Estimator<br/>Open3D / Stereo Matching"]
+            DET["Detector<br/>YOLOv8 (Ultralytics)"]
+            VOL["Volume Estimator<br/>Depth + BBox"]
+            TRACK["Tracker<br/>ByteTrack"]
+            TW["Tripwire Engine"]
+            HO["Handover Logic<br/>ROI + Disappear Frames"]
+            CLASS["Bag Classifier<br/>Volume thresholds"]
+        end
+
+        subgraph "Data & API Layer"
+            DB[(SQLite<br/>SQLAlchemy)]
+            API["FastAPI<br/>REST endpoints"]
+            NVR["NVR Recorder<br/>FFmpeg segmenter"]
+            CLIP["Clip Cutter<br/>Event-linked 5s clips"]
+        end
+
+        subgraph "Local UI"
+            KIOSK["Streamlit Kiosk<br/>Live view + Stats"]
+        end
+    end
+
+    subgraph "External"
+        OP["Operator / Supervisor"]
+    end
+
+    CAM1 -->|RTSP| CAP
+    CAM2 -->|RTSP| CAP
+    CAP -->|Frames| DET
+    CAP -->|Frames| DEPTH
+    DET -->|BBoxes| VOL
+    DEPTH -->|Depth Map| VOL
+    DET -->|Detections| TRACK
+    TRACK -->|Tracks| TW
+    TW -->|Crossed| HO
+    HO -->|Counted| CLASS
+    CLASS -->|BagEvent| DB
+    CLASS -->|Trigger| CLIP
+    NVR -->|Continuous segments| CLIP
+    CLIP -->|5s clip files| DB
+    API --> DB
+    KIOSK --> API
+    OP --> KIOSK
