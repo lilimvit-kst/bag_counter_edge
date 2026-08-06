@@ -1,6 +1,22 @@
 version: "3.9"
 
 services:
+  # Redis for Celery broker and WebSocket message store
+  redis:
+    image: redis:7-alpine
+    container_name: bag_counter_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
   edge-cv:
     build: .
     container_name: bag_counter_cv
@@ -11,15 +27,21 @@ services:
     # ports:
     #   - "8000:8000"   # FastAPI
     #   - "8501:8501"   # Streamlit kiosk
+    #   - "8765:8765"   # WebSocket
     environment:
       - PRIMARY_STREAM_URL=${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
       - SECONDARY_STREAM_URL=${SECONDARY_STREAM_URL:-rtsp://192.168.1.101:554/stream1}
       - FPS=${FPS:-25}
       - DETECTION_MODEL=${DETECTION_MODEL:-yolov8n.pt}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_ENABLED=true
+      - WEBSOCKET_ENABLED=true
     volumes:
       - ./storage:/app/storage
       - ./models:/app/models:ro
       - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - redis
     deploy:
       resources:
         limits:
@@ -34,6 +56,55 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  # Celery Worker for background tasks
+  celery-worker:
+    build: .
+    container_name: bag_counter_celery_worker
+    restart: unless-stopped
+    command: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    volumes:
+      - ./storage:/app/storage
+      - ./src:/app/src
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Celery Beat for periodic tasks (cleanup, stats update)
+  celery-beat:
+    build: .
+    container_name: bag_counter_celery_beat
+    restart: unless-stopped
+    command: celery -A src.tasks.celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
   # Streamlit Operator Dashboard
   dashboard:
     build: .
@@ -44,9 +115,13 @@ services:
       - "8501:8501"
     environment:
       - PYTHONPATH=/app
+      - REDIS_URL=redis://redis:6379/0
+      - WEBSOCKET_URL=ws://localhost:8765
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
+    depends_on:
+      - redis
     deploy:
       resources:
         limits:
@@ -81,3 +156,6 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+
+volumes:
+  redis_data:
