@@ -1,4 +1,4 @@
-# Bag Counter Edge — Autonomous CV System for Flour Bag Loading
+# Bag Counter Edge — Автономная CV-система для подсчета мешков с мукой
 
 ## 🚀 New Features (Latest Update)
 
