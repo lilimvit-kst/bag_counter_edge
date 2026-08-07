@@ -1,15 +1,15 @@
-# Bag Counter Edge — Автономная CV-система для подсчета мешков с мукой
+# Bag Counter Edge — Autonomous CV System for Flour Bag Loading
 
-## 🚀 Новые функции (Последнее обновление)
+## 🚀 New Features (Latest Update)
 
-### Улучшенный трекер ByteTrack с фильтром Калмана
-- **Сглаженные траектории**: Интегрирован фильтр Калмана для надежного отслеживания объектов при окклюзиях
-- **Настраиваемые параметры шума**: Настройка шума процесса и измерения для вашей конкретной камеры
-- **Улучшенная согласованность ID**: Уменьшено переключение треков при взаимодействии рабочих с мешками
+### Enhanced ByteTrack with Kalman Filtering
+- **Smooth Trajectories**: Integrated Kalman filter for robust object tracking during occlusions
+- **Configurable Noise Parameters**: Tune process and measurement noise for your specific camera setup
+- **Improved ID Consistency**: Reduced track switching during worker-bag interactions
 
-### Асинхронная обработка клипов
-- **Неблокирующая запись**: Видеоклипы сохраняются с использованием ThreadPoolExecutor для предотвращения потери кадров
-- **Фоновый ввод-вывод**: Основной конвейер детекции работает на полной частоте кадров, пока клипы записываются на диск
+### Async Clip Processing
+- **Non-blocking Recording**: Video clips saved using `ThreadPoolExecutor` to prevent frame drops
+- **Background I/O**: Main detection pipeline runs at full FPS while clips are written to disk
 
 ### Robust Camera Error Handling
 - **Auto-Reconnect**: Automatic reconnection on stream loss with configurable retry count
