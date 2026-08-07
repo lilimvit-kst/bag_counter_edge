@@ -475,3 +475,429 @@ Proprietary — All rights reserved.
 ## Contact
 
 For support, contact: support@example.com
+
+---
+
+## Docker & Контейнеризация
+
+Проект полностью контейнеризирован с использованием Docker и Docker Compose для обеспечения согласованности сред и упрощения развертывания.
+
+### Архитектура контейнеров
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│      Web        │────▶│     Redis        │◀────│    Celery       │
+│   (FastAPI)     │     │   (Broker/Cache) │     │    Worker       │
+│   Port: 8000    │     │   Port: 6379     │     │                 │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         ▲                       ▲                        ▲
+         │                       │                        │
+         │                ┌──────────────┐                │
+         └────────────────│   Flower     │◀───────────────┘
+                          │ (Monitoring) │
+                          │ Port: 5555   │
+                          └──────────────┘
+                                 ▲
+                                 │
+                          ┌──────────────┐
+                          │ Celery Beat  │
+                          │ (Scheduler)  │
+                          └──────────────┘
+```
+
+### Сервисы
+
+| Сервис | Описание | Порт | Образ |
+|--------|----------|------|-------|
+| `web` | FastAPI приложение (API + WebSocket) | 8000 | `bag-counter-edge:latest` |
+| `worker` | Celery worker для фоновых задач | - | `bag-counter-edge:worker` |
+| `beat` | Celery beat для периодических задач | - | `bag-counter-edge:worker` |
+| `redis` | Брокер сообщений и кэш | 6379 | `redis:7-alpine` |
+| `flower` | Мониторинг Celery задач | 5555 | `mher/flower:latest` |
+
+### Сборка образов
+
+```bash
+# Сборка основного образа
+docker build -t bag-counter-edge:latest .
+
+# Сборка образа для workers
+docker build -f Dockerfile.worker -t bag-counter-edge:worker .
+
+# Или через docker-compose (автоматически)
+docker-compose build
+```
+
+### Запуск стека
+
+```bash
+# Запуск всех сервисов
+docker-compose up -d
+
+# Просмотр логов
+docker-compose logs -f
+
+# Логи конкретного сервиса
+docker-compose logs -f worker
+
+# Остановка всех сервисов
+docker-compose down
+
+# Остановка с удалением томов (данные будут потеряны)
+docker-compose down -v
+```
+
+### Переменные окружения для Docker
+
+Все переменные из `.env` автоматически передаются в контейнеры. Дополнительные параметры:
+
+```bash
+# Docker-specific
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+# Масштабирование workers
+# Запустить 3 worker контейнера
+docker-compose up -d --scale worker=3
+```
+
+### Мониторинг с Flower
+
+Flower предоставляет веб-интерфейс для мониторинга Celery задач:
+
+```bash
+# Доступ к Flower
+open http://localhost:5555
+
+# Или в браузере: http://localhost:5555
+```
+
+**Возможности Flower:**
+- Просмотр активных, запланированных и завершенных задач
+- Статистика по workers (загрузка, память)
+- Графики выполнения задач
+- Управление задачами (отмена, повтор)
+
+### Примеры команд
+
+```bash
+# Выполнить миграции БД внутри контейнера
+docker-compose exec web python -m src.db.migrate
+
+# Запустить тесты
+docker-compose exec web pytest tests/ -v
+
+# Открыть shell в контейнере
+docker-compose exec web bash
+
+# Посмотреть статус Redis
+docker-compose exec redis redis-cli ping
+
+# Экспорт логов в файл
+docker-compose logs > logs/full.log 2>&1
+```
+
+### Оптимизация образов
+
+Образы оптимизированы для минимального размера:
+- **Основной образ**: ~450MB (многоступенчатая сборка, slim base)
+- **Worker образ**: ~420MB (без экспорта портов)
+- **Очистка кэша**: Удаление apt cache, pip cache после установки
+
+### Production рекомендации
+
+1. **Безопасность**:
+   - Замените секретные ключи в `.env`
+   - Используйте Docker secrets для чувствительных данных
+   - Не запускайте от root (добавьте USER в Dockerfile)
+
+2. **Ресурсы**:
+   ```yaml
+   # Ограничение ресурсов в docker-compose.yml
+   deploy:
+     resources:
+       limits:
+         cpus: '2'
+         memory: 2G
+       reservations:
+         cpus: '1'
+         memory: 1G
+   ```
+
+3. **Логирование**:
+   ```yaml
+   # Настройка логирования
+   logging:
+     driver: "json-file"
+     options:
+       max-size: "10m"
+       max-file: "3"
+   ```
+
+4. **Health checks**:
+   - Все сервисы имеют health checks
+   - Автоматический перезапуск при сбоях (`restart: unless-stopped`)
+
+---
+
+## Очередь задач (Celery + Redis)
+
+Система использует Celery с Redis в качестве брокера для асинхронной обработки тяжелых задач.
+
+### Типы задач
+
+| Задача | Описание | Периодичность |
+|--------|----------|---------------|
+| `process_event_clip` | Обработка и сохранение видео клипа | По событию |
+| `send_notification` | Отправка уведомления (email/Telegram) | По событию |
+| `generate_daily_report` | Генерация ежедневного отчета | Ежедневно в 23:00 |
+| `update_dashboard_stats` | Обновление статистики dashboard | Каждые 30 сек |
+| `cleanup_old_clips` | Очистка старых клипов | Ежедневно в 03:00 |
+
+### Запуск Workers
+
+```bash
+# Один worker
+docker-compose up -d worker
+
+# Несколько workers (масштабирование)
+docker-compose up -d --scale worker=3
+
+# Логи workers
+docker-compose logs -f worker
+
+# Мониторинг через Flower
+open http://localhost:5555
+```
+
+### Примеры задач
+
+**Отправка уведомления:**
+```python
+from src.tasks.notifications import send_notification_task
+
+# Асинхронная отправка
+send_notification_task.delay(
+    event_type="wagon_closed",
+    data={"wagon_id": "W-001", "total_bags": 1250}
+)
+```
+
+**Обработка клипа:**
+```python
+from src.tasks.clips import process_event_clip_task
+
+process_event_clip_task.delay(
+    event_id="evt_123",
+    clip_path="/storage/clips/evt_123.mp4"
+)
+```
+
+### Периодические задачи (Celery Beat)
+
+Настроены в `src/tasks/config.py`:
+
+```python
+beat_schedule = {
+    'cleanup-old-clips': {
+        'task': 'src.tasks.clips.cleanup_old_clips',
+        'schedule': crontab(hour=3, minute=0),  # Каждый день в 03:00
+    },
+    'generate-daily-report': {
+        'task': 'src.tasks.reports.generate_daily_report',
+        'schedule': crontab(hour=23, minute=0),  # Каждый день в 23:00
+    },
+    'update-dashboard-stats': {
+        'task': 'src.tasks.dashboard.update_dashboard_stats',
+        'schedule': 30.0,  # Каждые 30 секунд
+    },
+}
+```
+
+### Мониторинг задач
+
+**Через Flower:**
+- Активные задачи в реальном времени
+- История выполненных задач
+- Статистика по времени выполнения
+- Графики нагрузки workers
+
+**Через API:**
+```bash
+# Статус задачи
+curl http://localhost:8000/api/v1/tasks/{task_id}
+
+# Отменить задачу
+curl -X POST http://localhost:8000/api/v1/tasks/{task_id}/revoke
+```
+
+### Повторные попытки (Retry Logic)
+
+Задачи с автоматическими повторными попытками при сбоях:
+
+```python
+@app.task(bind=True, max_retries=3, default_retry_delay=60)
+def send_notification_task(self, event_type, data):
+    try:
+        # Логика отправки
+        ...
+    except Exception as exc:
+        # Экспоненциальная задержка: 60s, 120s, 240s
+        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+```
+
+---
+
+## WebSocket (Real-time обновления)
+
+Система поддерживает WebSocket соединения для real-time передачи событий на dashboard и другие клиенты.
+
+### Каналы (Channels)
+
+| Канал | Описание | Подписчики |
+|-------|----------|------------|
+| `general` | Общие системные события | Все клиенты |
+| `dashboard` | Обновления статистики dashboard | Operator UI |
+| `events` | События подсчета мешков | Dashboard, внешние системы |
+| `alerts` | Критические уведомления | Admin panel |
+
+### Подключение к WebSocket
+
+**JavaScript (Browser):**
+```javascript
+// Подключение к каналу dashboard
+const ws = new WebSocket('ws://localhost:8000/ws/dashboard');
+
+ws.onopen = () => {
+    console.log('Connected to WebSocket');
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Received:', data);
+    
+    // Обновление UI
+    if (data.type === 'bag_counted') {
+        updateCounter(data.bag_class, data.count);
+    }
+};
+
+ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+};
+
+ws.onclose = () => {
+    console.log('Connection closed, reconnecting...');
+    setTimeout(() => location.reload(), 3000);
+};
+```
+
+**Python клиент:**
+```python
+import asyncio
+import websockets
+import json
+
+async def listen_events():
+    uri = "ws://localhost:8000/ws/events"
+    async with websockets.connect(uri) as websocket:
+        while True:
+            message = await websocket.recv()
+            data = json.loads(message)
+            print(f"Событие: {data['type']}")
+            print(f"Данные: {data}")
+
+asyncio.run(listen_events())
+```
+
+### Формат сообщений
+
+Все сообщения отправляются в формате JSON:
+
+```json
+{
+    "type": "bag_counted",
+    "timestamp": "2025-01-15T14:30:00Z",
+    "channel": "events",
+    "data": {
+        "bag_id": "bag_12345",
+        "bag_class": "bag_25kg",
+        "confidence": 0.94,
+        "track_id": 42,
+        "wagon_id": "W-2025-0042"
+    }
+}
+```
+
+### Типы событий
+
+| Тип события | Канал | Описание |
+|-------------|-------|----------|
+| `bag_counted` | events | Мешок успешно подсчитан |
+| `wagon_closed` | events, alerts | Вагон закрыт |
+| `camera_disconnected` | alerts | Камера потеряна |
+| `camera_reconnected` | alerts | Камера восстановлена |
+| `low_stock_alert` | alerts | Низкий запас мешков |
+| `stats_updated` | dashboard | Статистика обновлена |
+| `system_health` | general | Статус системы |
+
+### Интеграция с Dashboard
+
+Streamlit dashboard автоматически подключается к WebSocket для real-time обновлений:
+
+```python
+# В src/kiosk/dashboard.py
+import streamlit as st
+import asyncio
+import websockets
+
+@st.experimental_fragment
+def live_stats():
+    if "ws_connected" not in st.session_state:
+        st.session_state.ws_connected = False
+    
+    # Подключение к WebSocket
+    if not st.session_state.ws_connected:
+        # Логика подключения
+        ...
+    
+    # Обработка входящих сообщений
+    for message in st.session_state.ws_messages:
+        if message["type"] == "stats_updated":
+            st.metric("Всего мешков", message["data"]["total"])
+```
+
+### Масштабирование WebSocket
+
+Для production с несколькими instances FastAPI:
+
+1. **Redis Pub/Sub**: Использование Redis для синхронизации сообщений между instances
+2. **Sticky Sessions**: Настройка load balancer для sticky sessions
+3. **Message Queue**: Отправка событий в Redis, рассылка всем подключенным clients
+
+```python
+# Пример с Redis Pub/Sub
+async def publish_message(channel: str, message: dict):
+    redis = await aioredis.from_url("redis://redis:6379")
+    await redis.publish(channel, json.dumps(message))
+```
+
+### Troubleshooting WebSocket
+
+**Проблема**: Клиент не может подключиться
+- Проверьте, что WebSocket endpoint доступен: `curl -i http://localhost:8000/ws/dashboard`
+- Убедитесь, что firewall не блокирует порт 8000
+- Проверьте логи: `docker-compose logs web | grep websocket`
+
+**Проблема**: Частые разрывы соединения
+- Увеличьте таймауты в настройках WebSocket
+- Реализуйте механизм reconnection на клиенте
+- Проверьте стабильность сети
+
+**Проблема**: Сообщения не доходят
+- Проверьте, что задача публикации в WebSocket вызывается
+- Убедитесь, что канал подписки совпадает с каналом публикации
+- Проверьте логи WebSocket manager
+
+---
