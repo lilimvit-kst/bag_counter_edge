@@ -51,10 +51,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.8"
-          memory: 4G
+          cpus: "1.5"
+          memory: 3G
         reservations:
-          cpus: "0.8"
+          cpus: "0.5"
           memory: 1G
     logging:
       driver: "json-file"
@@ -73,7 +73,7 @@ services:
     build: .
     container_name: bag_counter_celery_worker
     restart: unless-stopped
-    command: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A src.tasks.celery_app worker --loglevel=info --concurrency=2
     environment:
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/app
@@ -85,8 +85,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          cpus: "0.8"
+          memory: 768M
     logging:
       driver: "json-file"
       options:
