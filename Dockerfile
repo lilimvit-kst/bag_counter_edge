@@ -38,7 +38,7 @@ ENV PATH=/root/.local/bin:$PATH
 
 # Copy source code
 COPY src/ ./src/
-COPY models/ ./models/ 2>/dev/null || true
+COPY models/ ./models/
 
 # Ensure storage directories exist
 RUN mkdir -p storage/clips storage/db storage/nvr storage/logs
