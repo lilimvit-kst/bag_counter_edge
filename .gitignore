@@ -11,34 +11,21 @@ __pycache__/
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*~
-```
+# Coverage
+.coverage
+htmlcov/
+coverage/
 
-Wait, let me reconsider. The database file `storage/db/bag_counter.db` was added, but database files are typically not ignored unless they're temporary or generated. Since this appears to be a specific database file that was added, it might be intentional to track it. Let me revise:
-
-```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Logs
-*.log
+# Tests
+.pytest_cache/
 
 # Temporary files
 *.tmp
+*.swp
 *~
 ```
