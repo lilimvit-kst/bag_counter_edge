@@ -1,37 +1,82 @@
-```
-# Dependencies
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
+# Docker specific
+.dockerenv
+.dockerinit
+*.dockerfile
+!docker-compose.yml
+
+# Environment variables
 .env
 .env.local
 .env.*
-.ENV
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+.Python
 pip-log.txt
 pip-delete-this-directory.txt
-.tox/
+
+# Build artifacts
+build/
+dist/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.dll
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+*.out
+
+# Testing
 .coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+coverage/
+htmlcov/
+.nyc_output
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# Logs
 *.log
-.git/modules/
-.hg/
-.hgignore
-.hgcheck
-.hgsigs
-DS_Store
-Icon?
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
 ehthumbs.db
 Thumbs.db
-```
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.tmp
+
+# CI/CD
+.github/
+.gitlab/
+.travis.yml
+.circleci/
+.drone.yml
+.semaphore/
+.shippable.yml
+.codeclimate.yml
+.wercker/
+.buildkite/
+.jenkins
+.teamcity/
