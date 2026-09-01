@@ -2,8 +2,11 @@
 FastAPI service for local stats and health.
 Now includes WebSocket support and Celery task integration.
 """
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import SlowApi, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 from typing import Optional
 import asyncio
@@ -18,6 +21,23 @@ from src.tasks.tasks import (
 )
 
 app = FastAPI(title="Bag Counter Edge API")
+
+# Rate limiting setup
+slowapi_limiter = SlowApi(
+    key_func=get_remote_address,
+    default_limits=[f"{settings.API_RATE_LIMIT_PER_MINUTE}/minute"],
+)
+app.state.limiter = slowapi_limiter
+app.add_exception_handler(429, _rate_limit_exceeded_handler)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -35,10 +55,16 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Opt
     """Get current authenticated user from JWT token."""
     if not token:
         return None
-    # Simplified: in production, validate JWT properly
-    if token == "admin_token":  # Replace with actual JWT validation
-        return "admin"
-    return None
+    # Validate JWT token using API_SECRET_KEY
+    try:
+        from jose import jwt, JWTError
+        payload = jwt.decode(token, settings.API_SECRET_KEY, algorithms=["HS256"])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return username
+    except (JWTError, Exception):
+        return None
 
 
 @app.get("/health")
@@ -134,13 +160,12 @@ async def trigger_dashboard_update(
     wagon_id: Optional[int] = None,
     current_user: str = Depends(get_current_user)
 ):
-    """Update dashboard stats via Celery task."""
+    """Update dashboard stats via Celery task (non-blocking)."""
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     task = update_dashboard_task.delay(wagon_id)
-    result = task.get(timeout=10)  # Wait for result
-    return result
+    return {"task_id": task.id, "status": "queued"}
 
 
 # ── Broadcast Helpers ──────────────────────────────────────────────────────

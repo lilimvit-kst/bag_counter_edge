@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import smtplib
+import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
@@ -157,6 +158,3 @@ def build_report_from_wagon(wagon_id: int, db_session) -> Optional[WagonReport]:
         avg_volume_liters=round(avg_vol, 2),
         top_clip_paths=clips,
     )
-
-
-import statistics

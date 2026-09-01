@@ -19,13 +19,21 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from src.config import settings
 
 # Ensure DB directory exists
 settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(f"sqlite:///{settings.DB_PATH}", echo=False)
+# SQLite connection pool for better concurrency
+engine = create_engine(
+    f"sqlite:///{settings.DB_PATH}",
+    echo=False,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+    pool_pre_ping=True,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
