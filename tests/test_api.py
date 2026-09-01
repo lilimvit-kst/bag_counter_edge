@@ -16,8 +16,31 @@ from src.config import settings
 
 @pytest.fixture
 def client():
-    """Create a test client."""
-    return TestClient(app)
+    """Create a test client with in-memory DB."""
+    # Create in-memory DB for tests
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from src.db.models import Base, SessionLocal
+    
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
+    # Override the get_db dependency
+    def override_get_db():
+        try:
+            db = TestingSessionLocal()
+            yield db
+        finally:
+            db.close()
+    
+    from src.api.app import get_db
+    app.dependency_overrides[get_db] = override_get_db
+    
+    client = TestClient(app)
+    yield client
+    client.close()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
