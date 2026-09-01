@@ -1,1 +1,31 @@
-Nothing needs to be added to .gitignore since only a markdown file (.md) was added and there are no build artifacts, dependencies, or temporary files in the changes.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database
+*.db
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+coverage/
+
+# Tests
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+```
