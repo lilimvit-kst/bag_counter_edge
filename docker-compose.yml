@@ -36,6 +36,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_ENABLED=true
       - WEBSOCKET_ENABLED=true
+      # Security: require API_SECRET_KEY in production
+      - API_SECRET_KEY=${API_SECRET_KEY:-change-me-in-production}
+      - API_ADMIN_USER=${API_ADMIN_USER:-admin}
+      - API_ADMIN_PASS=${API_ADMIN_PASS:-admin}
+      # Logging configuration
+      - LOG_FORMAT=json
     volumes:
       - ./storage:/app/storage
       - ./models:/app/models:ro
@@ -55,6 +61,12 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Celery Worker for background tasks
   celery-worker:

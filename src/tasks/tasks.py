@@ -98,7 +98,7 @@ def send_notification_task(
     
     Args:
         event_type: Type of event (wagon_closed, low_stock, camera_error, etc.)
-        data: Event data payload
+        data: Event data payload (should contain wagon_id for wagon_closed events)
         channels: List of channels to use (['email', 'telegram']), defaults to all enabled
     
     Returns:
@@ -110,25 +110,74 @@ def send_notification_task(
         notifier = NotificationService()
         results = {}
         
-        # Determine which channels to use
-        if channels is None:
-            channels = []
-            if settings.SMTP_HOST and settings.EMAIL_TO:
-                channels.append('email')
-            if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
-                channels.append('telegram')
-        
-        for channel in channels:
+        # For wagon_closed events, build report from data
+        if event_type == "wagon_closed" and data.get("wagon_id"):
+            from sqlalchemy.orm import Session
+            from src.notifications.notifier import build_report_from_wagon
+            from src.db.models import SessionLocal
+            
+            db = SessionLocal()
             try:
-                if channel == 'email':
-                    success = notifier.send_email_notification(event_type, data)
-                    results['email'] = 'sent' if success else 'failed'
-                elif channel == 'telegram':
-                    success = notifier.send_telegram_notification(event_type, data)
-                    results['telegram'] = 'sent' if success else 'failed'
-            except Exception as e:
-                logger.error(f"Notification via {channel} failed: {e}")
-                results[channel] = f'error: {str(e)}'
+                report = build_report_from_wagon(data["wagon_id"], db)
+                if not report:
+                    logger.warning(f"Wagon {data['wagon_id']} not found for notification")
+                    return {"status": "error", "message": "Wagon not found"}
+                
+                # Determine which channels to use
+                if channels is None:
+                    channels = []
+                    if settings.SMTP_HOST and settings.EMAIL_TO:
+                        channels.append('email')
+                    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+                        channels.append('telegram')
+                
+                for channel in channels:
+                    try:
+                        if channel == 'email':
+                            success = notifier.send_email(report)
+                            results['email'] = 'sent' if success else 'failed'
+                        elif channel == 'telegram':
+                            success = notifier.send_telegram(report)
+                            results['telegram'] = 'sent' if success else 'failed'
+                    except Exception as e:
+                        logger.error(f"Notification via {channel} failed: {e}")
+                        results[channel] = f'error: {str(e)}'
+            finally:
+                db.close()
+        else:
+            # Generic notification handling for other event types
+            if channels is None:
+                channels = []
+                if settings.SMTP_HOST and settings.EMAIL_TO:
+                    channels.append('email')
+                if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+                    channels.append('telegram')
+            
+            # For non-wagon events, create simple WagonReport object
+            for channel in channels:
+                try:
+                    simple_report = WagonReport(
+                        wagon_number=data.get("wagon_number", "N/A"),
+                        shift_operator=data.get("operator", "system"),
+                        started_at=datetime.now(timezone.utc),
+                        ended_at=datetime.now(timezone.utc),
+                        total_bags=data.get("total_bags", 0),
+                        bags_25kg=data.get("bags_25kg", 0),
+                        bags_50kg=data.get("bags_50kg", 0),
+                        empty_bags=data.get("empty_bags", 0),
+                        total_weight_kg=data.get("weight_kg", 0),
+                        avg_volume_liters=data.get("avg_volume", 0.0),
+                        top_clip_paths=data.get("clip_paths", [])
+                    )
+                    if channel == 'email':
+                        success = notifier.send_email(simple_report)
+                        results['email'] = 'sent' if success else 'failed'
+                    elif channel == 'telegram':
+                        success = notifier.send_telegram(simple_report)
+                        results['telegram'] = 'sent' if success else 'failed'
+                except Exception as e:
+                    logger.error(f"Notification via {channel} failed: {e}")
+                    results[channel] = f'error: {str(e)}'
         
         logger.info(f"Notification results: {results}")
         return {
