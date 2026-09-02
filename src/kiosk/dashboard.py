@@ -395,17 +395,19 @@ class WebSocketClient:
 # ── UI Components ───────────────────────────────────────────────────────────
 def render_header():
     """Render modern header."""
-    col1, col2, col3 = st.columns([3, 1, 1])
+    # Use tighter columns and remove bottom margin
+    col1, col2, col3 = st.columns([4, 1, 1])
     
     with col1:
+        # Remove margin-bottom and use compact layout
         st.markdown("""
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <div style="font-size: 32px;">🎯</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="font-size: 28px;">🎯</div>
             <div>
-                <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">
+                <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #1e293b;">
                     Bag Counter Edge
                 </h1>
-                <p style="margin: 0; font-size: 13px; color: #64748b;">
+                <p style="margin: 0; font-size: 12px; color: #64748b;">
                     Real-time Operator Dashboard
                 </p>
             </div>
@@ -417,7 +419,7 @@ def render_header():
         status_color = "#22c55e" if st.session_state.ws_connected else "#94a3b8"
         status_text = "Connected" if st.session_state.ws_connected else "Offline"
         st.markdown(f"""
-        <div style="text-align: right;">
+        <div style="text-align: right; padding-top: 8px;">
             <span class="status-badge" style="background: rgba({status_color}, 0.2); color: {status_color};">
                 ● {status_text}
             </span>
@@ -425,15 +427,19 @@ def render_header():
         """, unsafe_allow_html=True)
     
     with col3:
-        # Timestamp
-        now = datetime.now().strftime("%H:%M:%S")
+        # Timestamp with UTC+5 timezone
+        from datetime import timedelta
+        utc_now = datetime.now(timezone.utc)
+        utc_plus_5 = utc_now + timedelta(hours=5)
+        now = utc_plus_5.strftime("%H:%M:%S")
         st.markdown(f"""
-        <div style="text-align: right; color: #64748b; font-size: 13px;">
-            {now}
+        <div style="text-align: right; color: #64748b; font-size: 13px; padding-top: 10px;">
+            {now} <span style="font-size: 11px;">(UTC+5)</span>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    # Remove the horizontal line to save space
+    # st.markdown("---")
 
 
 def render_metric_card(title: str, value: str, unit: str = "", icon: str = "📊"):
