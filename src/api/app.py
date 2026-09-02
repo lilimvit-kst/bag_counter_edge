@@ -1,6 +1,6 @@
 """
 FastAPI service for local stats and health.
-Now includes WebSocket support and Celery task integration.
+Now includes WebSocket support, Celery task integration, and Prometheus metrics.
 """
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -10,6 +10,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 from typing import Optional
 import asyncio
+import time
 
 from src.db.models import SessionLocal, Wagon, BagEvent, Shift
 from src.config import settings
@@ -19,8 +20,19 @@ from src.tasks.tasks import (
     generate_report_task,
     update_dashboard_task,
 )
+from src.monitoring.metrics import (
+    router as metrics_router,
+    record_api_request,
+    record_bag_detected,
+    record_detection_confidence,
+    update_connected_clients,
+    BAG_COUNT_TOTAL,
+)
 
 app = FastAPI(title="Bag Counter Edge API")
+
+# Include Prometheus metrics router
+app.include_router(metrics_router)
 
 # Rate limiting setup
 slowapi_limiter = Limiter(
