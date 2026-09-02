@@ -248,7 +248,18 @@ header {visibility: hidden;}
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 8px;
+}
+
+/* Reduce top padding for main content */
+.main > div:first-child {
+    padding-top: 10px !important;
+}
+
+/* Remove extra spacing from headers */
+.css-1l02zno, .css-53h4ph {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 /* Animations */
@@ -395,17 +406,18 @@ class WebSocketClient:
 # ── UI Components ───────────────────────────────────────────────────────────
 def render_header():
     """Render modern header."""
-    col1, col2, col3 = st.columns([3, 1, 1])
+    # Use tighter columns and remove bottom margin
+    col1, col2, col3 = st.columns([4, 1, 1])
     
     with col1:
+        # Remove margin-bottom and use compact layout - no icon
         st.markdown("""
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <div style="font-size: 32px;">🎯</div>
+        <div style="display: flex; align-items: center; gap: 0px;">
             <div>
-                <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">
+                <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #1e293b;">
                     Bag Counter Edge
                 </h1>
-                <p style="margin: 0; font-size: 13px; color: #64748b;">
+                <p style="margin: 0; font-size: 12px; color: #64748b;">
                     Real-time Operator Dashboard
                 </p>
             </div>
@@ -417,7 +429,7 @@ def render_header():
         status_color = "#22c55e" if st.session_state.ws_connected else "#94a3b8"
         status_text = "Connected" if st.session_state.ws_connected else "Offline"
         st.markdown(f"""
-        <div style="text-align: right;">
+        <div style="text-align: right; padding-top: 8px;">
             <span class="status-badge" style="background: rgba({status_color}, 0.2); color: {status_color};">
                 ● {status_text}
             </span>
@@ -425,15 +437,19 @@ def render_header():
         """, unsafe_allow_html=True)
     
     with col3:
-        # Timestamp
-        now = datetime.now().strftime("%H:%M:%S")
+        # Timestamp with UTC+5 timezone
+        from datetime import timedelta
+        utc_now = datetime.now(timezone.utc)
+        utc_plus_5 = utc_now + timedelta(hours=5)
+        now = utc_plus_5.strftime("%H:%M:%S")
         st.markdown(f"""
-        <div style="text-align: right; color: #64748b; font-size: 13px;">
-            {now}
+        <div style="text-align: right; color: #64748b; font-size: 13px; padding-top: 10px;">
+            {now} <span style="font-size: 11px;">(UTC+5)</span>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
+    # Remove the horizontal line to save space
+    # st.markdown("---")
 
 
 def render_metric_card(title: str, value: str, unit: str = "", icon: str = "📊"):
@@ -515,7 +531,7 @@ def render_status_cards(db: Session):
 
 def render_class_breakdown(stats: dict):
     """Render bag class breakdown with modern badges."""
-    st.markdown("### 📦 Bag Classification Breakdown")
+    st.markdown("### Bag Classification Breakdown")
     
     cols = st.columns(3)
     classes = [
@@ -563,7 +579,7 @@ def render_class_breakdown(stats: dict):
 
 def render_live_video():
     """Render live video stream placeholder."""
-    st.markdown("### 📹 Live Camera Feed")
+    st.markdown("### Live Camera Feed")
     
     if not st.session_state.live_video_enabled:
         st.info("👆 Enable live video in the sidebar to see real-time camera feed")
@@ -590,7 +606,7 @@ def render_live_video():
 
 def render_event_log(db: Session):
     """Render event log with modern styling."""
-    st.markdown("### 📝 Recent Detection Events")
+    st.markdown("### Recent Detection Events")
     
     events = get_recent_events(db, limit=20)
     
@@ -629,7 +645,7 @@ def render_event_log(db: Session):
 
 def render_actions(db: Session):
     """Render action buttons with modern styling."""
-    st.markdown("### ⚡ Quick Actions")
+    st.markdown("### Quick Actions")
     
     col1, col2, col3 = st.columns(3)
     
@@ -699,7 +715,7 @@ def render_actions(db: Session):
 def render_sidebar():
     """Render sidebar with settings."""
     with st.sidebar:
-        st.markdown("### ⚙️ Dashboard Settings")
+        st.markdown("### Dashboard Settings")
         
         st.session_state.live_video_enabled = st.toggle(
             "📹 Live Video",
@@ -714,7 +730,7 @@ def render_sidebar():
         )
         
         st.markdown("---")
-        st.markdown("### 📊 System Info")
+        st.markdown("### System Info")
         
         st.code(f"""DB: {settings.DB_PATH}
 Clips: {settings.CLIPS_DIR}
@@ -722,7 +738,7 @@ Model: {settings.DETECTION_MODEL}""")
         
         # Prometheus metrics link
         st.markdown("""
-        ### 🔍 Monitoring
+        ### Monitoring
         
         [📈 View Prometheus Metrics](/metrics)
         
@@ -750,12 +766,11 @@ def main():
     # Render main content
     shift, wagon, stats = render_status_cards(db)
     
-    # Two-column layout
-    col1, col2 = st.columns([2, 1])
+    # Two-column layout with reduced gap
+    col1, col2 = st.columns([2, 1], gap="small")
     
     with col1:
         render_class_breakdown(stats)
-        st.markdown("")  # Spacer
         render_event_log(db)
     
     with col2:
@@ -763,7 +778,7 @@ def main():
             render_live_video()
         else:
             st.markdown("""
-            ### 📹 Live Preview
+            ### Live Preview
             
             <div style="
                 background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
@@ -778,7 +793,6 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         
-        st.markdown("")  # Spacer
         render_actions(db)
     
     # Auto-refresh logic using Streamlit's experimental rerun

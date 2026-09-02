@@ -143,7 +143,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 API_HOST=0.0.0.0
 API_PORT=8000
 API_SECRET_KEY=your-super-secret-key-change-in-production
-API_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+API_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000","http://localhost:8501","http://127.0.0.1:8501"]
 
 # Камера
 CAMERA_SOURCE=rtsp://admin:password@192.168.1.100:554/stream1
@@ -375,7 +375,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
 
 Если развернут интерфейс киоска:
 ```
-http://localhost:3000
+http://localhost:8501
 ```
 
 Основные функции:
@@ -509,7 +509,7 @@ chromium-browser \
     --noerrdialogs \
     --window-size=1920,1080 \
     --start-fullscreen \
-    --app=http://localhost:3000 \
+    --app=http://localhost:8501 \
     --user-data-dir=/tmp/chromium-kiosk
 
 # Обработка закрытия
@@ -564,7 +564,7 @@ cd /opt/bag-counter-edge
 
 Или вручную откройте браузер в режиме киоска:
 ```bash
-chromium-browser --kiosk --app=http://localhost:3000
+chromium-browser --kiosk --app=http://localhost:8501
 ```
 
 ### 7. Выход из режима киоска
@@ -594,10 +594,10 @@ ps aux | grep chromium
 cat /var/log/Xorg.0.log | grep -i error
 
 # Проверка доступности веб-интерфейса
-curl -I http://localhost:3000
+curl -I http://localhost:8501
 
 # Тестирование без режима киоска
-chromium-browser http://localhost:3000
+chromium-browser http://localhost:8501
 ```
 
 ### 10. Настройка разрешения экрана
@@ -964,7 +964,9 @@ sudo apt install -y ufw
 sudo ufw default deny incoming
 sudo ufw allow 22/tcp        # SSH
 sudo ufw allow 8000/tcp      # API
-sudo ufw allow 3000/tcp      # Web UI (если есть)
+sudo ufw allow 3000/tcp      # Grafana Dashboard
+sudo ufw allow 8501/tcp      # Kiosk Dashboard (Streamlit)
+sudo ufw allow 9090/tcp      # Prometheus (опционально)
 sudo ufw enable
 ```
 
@@ -989,6 +991,7 @@ sudo apt update && sudo apt upgrade -y
 - [Мониторинг Prometheus/Grafana](./MONITORING.md)
 - [Metrics Endpoint](http://localhost:8000/metrics)
 - [Grafana Dashboard](http://localhost:3000)
+- [Kiosk Dashboard](http://localhost:8501)
 
 ## Поддержка
 
