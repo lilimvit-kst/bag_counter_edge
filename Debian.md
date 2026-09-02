@@ -9,8 +9,9 @@
 4. [Настройка проекта](#настройка-проекта)
 5. [Запуск приложения](#запуск-приложения)
 6. [Использование системы](#использование-системы)
-7. [Управление сервисами](#управление-сервисами)
-8. [Диагностика проблем](#диагностика-проблем)
+7. [Запуск в режиме киоска](#запуск-в-режиме-киоска-kiosk-mode)
+8. [Управление сервисами](#управление-сервисами)
+9. [Диагностика проблем](#диагностика-проблем)
 
 ---
 
@@ -196,11 +197,41 @@ wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt -
 
 ## Запуск приложения
 
+### Выбор конфигурации Docker Compose
+
+В зависимости от количества ядер процессора выберите соответствующий файл конфигурации:
+
+#### Для систем с 2 ядрами CPU
+```bash
+docker compose -f docker-compose-2CPU.yml up -d
+```
+Этот файл оптимизирован для двуядерных систем с ограниченными ресурсами:
+- Лимит CPU для edge-cv: 1.8
+- Резервирование CPU: 0.5
+- Ограниченное потребление памяти
+
+#### Для систем с 4 и более ядрами CPU
+```bash
+docker compose -f docker-compose-4CPU.yml up -d
+```
+Этот файл предназначен для систем с четырьмя и более ядрами:
+- Лимит CPU для edge-cv: 3.0
+- Резервирование CPU: 1.0
+- Увеличенное выделение памяти для всех сервисов
+
+#### Стандартный запуск (автоопределение)
+```bash
+docker compose up -d
+```
+Использует основной файл `docker-compose.yml` с настройками по умолчанию.
+
 ### Вариант А: Через Docker Compose (Рекомендуется)
 
 #### 1. Запуск всех сервисов
 ```bash
-docker compose up -d
+docker compose -f docker-compose-2CPU.yml up -d  # Для 2 ядер
+# или
+docker compose -f docker-compose-4CPU.yml up -d  # Для 4+ ядер
 ```
 
 #### 2. Проверка статуса контейнеров
@@ -377,6 +408,168 @@ ls -lh storage/clips/
 curl -H "Authorization: Bearer YOUR_API_KEY" \
      http://localhost:8000/api/clips?date=2024-01-01
 ```
+
+---
+
+## Запуск в режиме киоска (Kiosk Mode)
+
+Режим киоска позволяет автоматически запускать веб-интерфейс системы при загрузке компьютера в полноэкранном режиме. Это полезно для развертывания на производственных линиях.
+
+### 1. Установка необходимых пакетов
+
+```bash
+sudo apt update
+sudo apt install -y chromium-browser xdotool wmctrl openbox
+```
+
+### 2. Настройка автозапуска браузера
+
+Создайте файл автозапуска:
+```bash
+mkdir -p ~/.config/autostart
+cat > ~/.config/autostart/kiosk.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=Bag Counter Kiosk
+Exec=/opt/bag-counter-edge/scripts/start-kiosk.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
+```
+
+### 3. Создание скрипта запуска киоска
+
+```bash
+sudo mkdir -p /opt/bag-counter-edge/scripts
+sudo tee /opt/bag-counter-edge/scripts/start-kiosk.sh > /dev/null << 'EOF'
+#!/bin/bash
+
+# Ждем запуска API
+echo "Ожидание запуска API..."
+until curl -s http://localhost:8000/api/health > /dev/null; do
+    sleep 5
+done
+
+echo "API доступен, запуск браузера..."
+
+# Запуск Chromium в режиме киоска
+chromium-browser \
+    --kiosk \
+    --no-first-run \
+    --disable-checker-imaging-fix \
+    --disable-translate \
+    --disable-background-networking \
+    --disable-default-apps \
+    --disable-extensions \
+    --disable-sync \
+    --noerrdialogs \
+    --window-size=1920,1080 \
+    --start-fullscreen \
+    --app=http://localhost:3000 \
+    --user-data-dir=/tmp/chromium-kiosk
+
+# Обработка закрытия
+trap "killall chromium-browser" EXIT
+EOF
+
+chmod +x /opt/bag-counter-edge/scripts/start-kiosk.sh
+```
+
+### 4. Настройка дисплейного менеджера (опционально)
+
+Для автоматического входа в систему и запуска киоска:
+
+```bash
+# Для LightDM
+sudo apt install -y lightdm lightdm-gtk-greeter
+sudo systemctl enable lightdm
+
+# Настройка автоматического входа
+sudo mkdir -p /etc/lightdm
+sudo tee /etc/lightdm/lightdm.conf > /dev/null << EOF
+[Seat:*]
+autologin-user=$USER
+autologin-user-timeout=0
+session-session=openbox
+EOF
+```
+
+### 5. Конфигурация Openbox для киоска
+
+```bash
+mkdir -p ~/.config/openbox
+cat > ~/.config/openbox/autostart << 'EOF'
+# Отключаем скринсейвер
+xset s off
+xset -dpms
+xset s noblank
+
+# Запуск киоска через 5 секунд
+(sleep 5 && /opt/bag-counter-edge/scripts/start-kiosk.sh) &
+EOF
+```
+
+### 6. Быстрый запуск киоска (ручной режим)
+
+Для быстрого тестирования без настройки автозапуска:
+
+```bash
+cd /opt/bag-counter-edge
+./scripts/start-kiosk.sh
+```
+
+Или вручную откройте браузер в режиме киоска:
+```bash
+chromium-browser --kiosk --app=http://localhost:3000
+```
+
+### 7. Выход из режима киоска
+
+- **Стандартный выход**: `Alt+F4`
+- **Закрыть браузер**: `Ctrl+Q`
+- **Переключиться в другой workspace**: `Ctrl+Alt+Стрелки`
+- **Открыть терминал**: `Ctrl+Alt+T` (если настроен)
+
+### 8. Остановка киоска
+
+```bash
+# Принудительное завершение
+killall chromium-browser
+
+# Или перезагрузка системы
+sudo reboot
+```
+
+### 9. Диагностика проблем киоска
+
+```bash
+# Проверка запущенных процессов
+ps aux | grep chromium
+
+# Логи X сервера
+cat /var/log/Xorg.0.log | grep -i error
+
+# Проверка доступности веб-интерфейса
+curl -I http://localhost:3000
+
+# Тестирование без режима киоска
+chromium-browser http://localhost:3000
+```
+
+### 10. Настройка разрешения экрана
+
+Если разрешение не соответствует монитору:
+
+```bash
+# Просмотр доступных разрешений
+xrandr
+
+# Установка нужного разрешения (пример)
+xrandr --output HDMI-1 --mode 1920x1080 --rate 60
+```
+
+Добавьте команду `xrandr` в `~/.config/openbox/autostart` перед запуском киоска.
 
 ---
 
