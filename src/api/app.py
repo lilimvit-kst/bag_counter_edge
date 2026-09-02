@@ -2,7 +2,7 @@
 FastAPI service for local stats and health.
 Now includes WebSocket support and Celery task integration.
 """
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -10,6 +10,9 @@ from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 from typing import Optional
 import asyncio
+import cv2
+import numpy as np
+from pathlib import Path
 
 from src.db.models import SessionLocal, Wagon, BagEvent, Shift
 from src.config import settings
@@ -42,6 +45,9 @@ app.add_middleware(
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
+# Store last frame in memory for live streaming
+_last_frame: Optional[np.ndarray] = None
+
 
 def get_db():
     db = SessionLocal()
@@ -65,6 +71,17 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Opt
         return username
     except (JWTError, Exception):
         return None
+
+
+def update_last_frame(frame: np.ndarray):
+    """Update the last frame for live streaming."""
+    global _last_frame
+    _last_frame = frame
+
+
+def get_last_frame() -> Optional[np.ndarray]:
+    """Get the last frame for live streaming."""
+    return _last_frame
 
 
 @app.get("/health")
@@ -92,6 +109,47 @@ def today_stats(db: Session = Depends(get_db)):
     for cls in ["25kg", "50kg", "empty"]:
         by_class[cls] = db.query(BagEvent).filter_by(bag_class=cls).count()
     return {"total_counted": total, "by_class": by_class}
+
+
+# ── Live Video Frame Endpoint ────────────────────────────────────────────────
+@app.get("/api/v1/live/frame")
+async def get_live_frame():
+    """
+    Get the latest video frame with detection overlay.
+    Returns JPEG image for dashboard display.
+    
+    This endpoint is used by the Streamlit dashboard to show live video.
+    The detection service should call update_last_frame() periodically.
+    """
+    global _last_frame
+    
+    if _last_frame is None:
+        # Try to get latest clip frame as fallback
+        clips_dir = Path(settings.CLIPS_DIR)
+        if clips_dir.exists():
+            clips = list(clips_dir.glob("*.mp4"))
+            if clips:
+                latest_clip = max(clips, key=lambda p: p.stat().st_mtime)
+                cap = cv2.VideoCapture(str(latest_clip))
+                ret, frame = cap.read()
+                cap.release()
+                if ret:
+                    _last_frame = frame
+                else:
+                    raise HTTPException(status_code=404, detail="No video stream available")
+            else:
+                raise HTTPException(status_code=404, detail="No video stream available")
+        else:
+            raise HTTPException(status_code=404, detail="No video stream available")
+    
+    # Encode frame as JPEG
+    _, buffer = cv2.imencode('.jpg', _last_frame)
+    
+    return Response(
+        content=buffer.tobytes(),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 
 # ── WebSocket Endpoint ──────────────────────────────────────────────────────

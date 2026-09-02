@@ -22,6 +22,8 @@ pydantic-settings>=2.2.0
 
 # Frontend (kiosk monitor)
 streamlit>=1.36.0
+streamlit-autorefresh>=0.1.0
+requests>=2.31.0
 
 # Video / NVR
 ffmpeg-python>=0.2.0
