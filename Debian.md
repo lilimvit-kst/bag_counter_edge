@@ -10,8 +10,9 @@
 5. [Запуск приложения](#запуск-приложения)
 6. [Использование системы](#использование-системы)
 7. [Запуск в режиме киоска](#запуск-в-режиме-киоска-kiosk-mode)
-8. [Управление сервисами](#управление-сервисами)
-9. [Диагностика проблем](#диагностика-проблем)
+8. [Мониторинг Prometheus/Grafana](#мониторинг-prometheusgrafana)
+9. [Управление сервисами](#управление-сервисами)
+10. [Диагностика проблем](#диагностика-проблем)
 
 ---
 
@@ -225,6 +226,21 @@ docker compose up -d
 ```
 Использует основной файл `docker-compose.yml` с настройками по умолчанию.
 
+#### Запуск с мониторингом (Prometheus + Grafana)
+```bash
+# Сначала запустите основные сервисы
+docker compose up -d
+
+# Затем запустите стек мониторинга
+docker compose -f docker-compose.monitoring.yml up -d
+```
+Этот вариант добавляет сервисы Prometheus (сбор метрик) и Grafana (визуализация):
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin123)
+- Metrics endpoint: http://localhost:8000/metrics
+
+Подробнее см. раздел [Мониторинг Prometheus/Grafana](#мониторинг-prometheusgrafana).
+
 ### Вариант А: Через Docker Compose (Рекомендуется)
 
 #### 1. Запуск всех сервисов
@@ -363,10 +379,37 @@ http://localhost:3000
 ```
 
 Основные функции:
-- Мониторинг в реальном времени
-- Просмотр статистики по пакетам
+- Мониторинг в реальном времени через WebSocket (без перезагрузки страницы)
+- Просмотр статистики по пакетам с разбивкой по классам (25kg, 50kg, empty)
+- Live Video режим для просмотра видео с камеры в реальном времени
 - Настройка зон детекции
 - Управление уведомлениями
+- Индикатор подключения и статус системы
+
+**Новые возможности Dashboard:**
+- Real-time обновления счётчиков без моргания страницы
+- Анимация изменений (+N since last update)
+- Красивый современный UI с градиентами и тенями
+- Live режим с пульсирующим индикатором
+- Боковая панель с настройками
+
+### 2.1. Мониторинг через Grafana
+
+Для доступа к дашбордам мониторинга:
+```
+http://localhost:3000
+```
+Логин: `admin`, Пароль: `admin123`
+
+Доступные дашборды:
+- **Bag Counter Operations**: общая статистика, метрики обработки, системные ресурсы
+- Метрики в реальном времени: количество мешков, время обработки, ошибки детекции
+- Графики: API latency, CPU/Memory usage, WebSocket клиенты
+
+Альтернативно, сырые метрики Prometheus доступны по адресу:
+```
+http://localhost:8000/metrics
+```
 
 ### 3. Настройка уведомлений
 
@@ -570,6 +613,102 @@ xrandr --output HDMI-1 --mode 1920x1080 --rate 60
 ```
 
 Добавьте команду `xrandr` в `~/.config/openbox/autostart` перед запуском киоска.
+
+---
+
+## Мониторинг Prometheus/Grafana
+
+Система включает интеграцию с Prometheus и Grafana для мониторинга производительности, метрик обработки и использования ресурсов.
+
+### 1. Запуск мониторинга
+
+```bash
+# Запустить сервисы Prometheus и Grafana
+docker compose -f docker-compose.monitoring.yml up -d
+```
+
+### 2. Доступ к интерфейсам
+
+- **Grafana**: http://localhost:3000
+  - Логин: `admin`
+  - Пароль: `admin123`
+  - Дашборд "Bag Counter Operations" импортируется автоматически
+
+- **Prometheus**: http://localhost:9090
+  - Просмотр метрик и выполнение запросов
+  - Target status: http://localhost:9090/targets
+
+- **Metrics endpoint**: http://localhost:8000/metrics
+  - Сырые метрики в формате Prometheus
+
+### 3. Доступные метрики
+
+#### Метрики подсчёта мешков
+- `bag_counter_bags_total{class,wagon_id,shift_id}` — общее количество подсчитанных мешков по классам
+- `bag_counter_processing_time_seconds` — время обработки одного кадра/объекта
+- `bag_counter_detection_confidence` — уверенность детекции объектов
+- `bag_counter_detection_errors_total` — количество ошибок детекции
+
+#### Метрики API
+- `bag_counter_api_requests_total{method,endpoint,status}` — количество API запросов
+- `bag_counter_api_latency_seconds{method,endpoint}` — задержки API
+
+#### Метрики WebSocket
+- `bag_counter_websocket_clients` — количество подключённых WebSocket клиентов
+- `bag_counter_websocket_messages_total` — количество отправленных сообщений
+
+#### Системные метрики
+- `bag_counter_cpu_usage_percent` — использование CPU
+- `bag_counter_memory_usage_bytes` — использование памяти
+- `process_resident_memory_bytes` — резидентная память процесса
+- `process_cpu_seconds_total` — общее время CPU
+
+### 4. Настройка алертов (опционально)
+
+Создайте файл алертов в `monitoring/prometheus/alerts.yml`:
+
+```yaml
+groups:
+  - name: bag_counter_alerts
+    rules:
+      - alert: HighDetectionErrorRate
+        expr: rate(bag_counter_detection_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень ошибок детекции"
+          description: "Уровень ошибок детекции превышает 10% в течение 5 минут"
+
+      - alert: HighProcessingTime
+        expr: histogram_quantile(0.95, rate(bag_counter_processing_time_seconds_bucket[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое время обработки"
+          description: "P95 времени обработки превышает 1 секунду"
+```
+
+### 5. Обновление дашборда Grafana
+
+Для импорта обновлённого дашборда:
+
+```bash
+# Копировать файл дашборда
+cp monitoring/grafana/dashboards/bag-counter-ops.json /path/to/grafana/provisioning/dashboards/
+
+# Перезапустить Grafana
+docker compose -f docker-compose.monitoring.yml restart grafana
+```
+
+### 6. Остановка мониторинга
+
+```bash
+docker compose -f docker-compose.monitoring.yml down
+```
+
+**Примечание**: Данные Prometheus сохраняются в volume `prometheus_data`, данные Grafana — в `grafana_data`. Для полного сброса используйте флаг `-v`.
 
 ---
 
@@ -847,6 +986,9 @@ sudo apt update && sudo apt upgrade -y
 - [API Documentation](http://localhost:8000/docs)
 - [README.md](./README.md)
 - [Docs](./docs/)
+- [Мониторинг Prometheus/Grafana](./MONITORING.md)
+- [Metrics Endpoint](http://localhost:8000/metrics)
+- [Grafana Dashboard](http://localhost:3000)
 
 ## Поддержка
 
