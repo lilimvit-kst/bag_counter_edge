@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     # Dashboard / API configuration (for kiosk service)
     API_HOST: str = Field(default="localhost", env="API_HOST")
     API_PORT: int = Field(default=8000, env="API_PORT")
+    INTERNAL_API_HOST: str = Field(default="edge-cv", env="INTERNAL_API_HOST")
     # GUI settings (disable in Docker/headless environments)
     USE_GUI: bool = Field(default=True, env="USE_GUI")
     
@@ -122,6 +123,11 @@ class Settings(BaseSettings):
     def API_BASE_URL(self) -> str:
         """Get base URL for API calls from dashboard."""
         return f"http://{self.API_HOST}:{self.API_PORT}"
+    
+    @property
+    def INTERNAL_API_BASE_URL(self) -> str:
+        """Get internal API URL for Docker network communication."""
+        return f"http://{self.INTERNAL_API_HOST}:{self.API_PORT}"
 
     class Config:
         env_file = ".env"
