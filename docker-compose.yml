@@ -147,6 +147,8 @@ services:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
       - WEBSOCKET_URL=ws://edge-cv:8765
+      - RUN_MODE=docker
+      - INTERNAL_API_HOST=edge-cv
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src

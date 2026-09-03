@@ -593,7 +593,7 @@ def render_live_video():
     # Определяем базовый URL для API динамически
     # Логика приоритетов:
     # 1. Явные переменные DASHBOARD_API_HOST и DASHBOARD_API_PORT имеют наивысший приоритет
-    # 2. Если их нет, используем RUN_MODE=docker → http://edge-cv:<port>
+    # 2. Если RUN_MODE=docker, используем INTERNAL_API_HOST (по умолчанию edge-cv) для внутренних запросов
     # 3. Иначе конструируем из API_HOST:API_PORT (для local и network режимов)
     
     dashboard_api_host = os.getenv("DASHBOARD_API_HOST")
@@ -606,10 +606,11 @@ def render_live_video():
         run_mode = os.getenv("RUN_MODE", "local")
         
         if run_mode == "docker":
-            # Для режима docker используем имя сервиса edge-cv
-            # Работает только когда браузер находится внутри той же Docker-сети
+            # Для режима docker используем внутреннее имя сервиса для запросов от контейнера
+            # INTERNAL_API_HOST по умолчанию = edge-cv (из .env)
+            internal_api_host = os.getenv("INTERNAL_API_HOST", "edge-cv")
             api_port = os.getenv("API_PORT", "8000")
-            api_base_url = f"http://edge-cv:{api_port}"
+            api_base_url = f"http://{internal_api_host}:{api_port}"
         else:
             # Для local и network режимов используем API_HOST
             # Это должен быть IP-адрес или домен, доступный из вашей сети
