@@ -24,7 +24,6 @@ services:
     # Edge PC: use explicit ports to allow DNS resolution from other containers
     ports:
       - "8000:8000"   # FastAPI
-      - "8501:8501"   # Streamlit kiosk (fallback)
       - "8765:8765"   # WebSocket
     # For RTSP cameras on host, ensure camera IPs are reachable from container
     # If cameras are on host network only, you may need network_mode: host instead
@@ -142,14 +141,12 @@ services:
     command: ["streamlit", "run", "src/kiosk/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     ports:
       - "8501:8501"
+    env_file:
+      - .env
     environment:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
       - WEBSOCKET_URL=ws://edge-cv:8765
-      # Режим network для доступа из внешней сети через IP-адрес сервера
-      # DASHBOARD_API_HOST должен быть установлен в .env файле как IP-адрес сервера (например, 10.10.10.235)
-      - RUN_MODE=network
-      # API_HOST и API_PORT будут взяты из .env файла (DASHBOARD_API_HOST/DASHBOARD_API_PORT или API_HOST/API_PORT)
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
