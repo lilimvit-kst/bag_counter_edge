@@ -146,6 +146,8 @@ services:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
       - WEBSOCKET_URL=ws://edge-cv:8765
+      # Для Docker Compose используем RUN_MODE=docker, чтобы dashboard использовал 'edge-cv' как хост
+      - RUN_MODE=docker
       - API_HOST=edge-cv
       - API_PORT=8000
     volumes:
