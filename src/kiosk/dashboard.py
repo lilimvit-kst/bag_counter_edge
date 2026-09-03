@@ -588,6 +588,19 @@ def render_live_video():
     # Get video stream URL from API - use settings.API_BASE_URL for Docker network
     video_url = f"{settings.API_BASE_URL}/api/v1/video/stream"
     
+    # Try to fetch a frame to test connectivity
+    try:
+        response = requests.get(video_url, timeout=2, stream=True)
+        if response.status_code != 200:
+            st.error(f"❌ Video stream unavailable (HTTP {response.status_code})")
+            st.warning(f"Check that edge-cv service is running and API_HOST={settings.API_HOST}")
+            return
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Cannot connect to video stream: {str(e)}")
+        st.warning(f"API_BASE_URL={settings.API_BASE_URL}")
+        st.info("💡 Make sure 'edge-cv' container is running and accessible from 'dashboard' container")
+        return
+    
     # Render video with HTML img tag for MJPEG stream
     st.markdown(f"""
     <div class="video-container">
