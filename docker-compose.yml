@@ -21,13 +21,13 @@ services:
     build: .
     container_name: bag_counter_cv
     restart: unless-stopped
-    # Edge PC: access host network for RTSP cameras
-    network_mode: host
-    # Or use explicit ports if host network unavailable:
-    # ports:
-    #   - "8000:8000"   # FastAPI
-    #   - "8501:8501"   # Streamlit kiosk
-    #   - "8765:8765"   # WebSocket
+    # Edge PC: use explicit ports to allow DNS resolution from other containers
+    ports:
+      - "8000:8000"   # FastAPI
+      - "8501:8501"   # Streamlit kiosk (fallback)
+      - "8765:8765"   # WebSocket
+    # For RTSP cameras on host, ensure camera IPs are reachable from container
+    # If cameras are on host network only, you may need network_mode: host instead
     env_file:
       - .env
     environment:
@@ -146,10 +146,10 @@ services:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
       - WEBSOCKET_URL=ws://edge-cv:8765
-      # Для Docker Compose используем RUN_MODE=docker, чтобы dashboard использовал 'edge-cv' как хост
-      - RUN_MODE=docker
-      - API_HOST=edge-cv
-      - API_PORT=8000
+      # Режим network для доступа из внешней сети через IP-адрес сервера
+      # DASHBOARD_API_HOST должен быть установлен в .env файле как IP-адрес сервера (например, 10.10.10.235)
+      - RUN_MODE=network
+      # API_HOST и API_PORT будут взяты из .env файла (DASHBOARD_API_HOST/DASHBOARD_API_PORT или API_HOST/API_PORT)
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
@@ -172,7 +172,9 @@ services:
     image: jrottenberg/ffmpeg:6.1-alpine
     container_name: bag_counter_nvr
     restart: unless-stopped
-    network_mode: host
+    # Use bridge network instead of host to stay in same Docker network
+    # If RTSP cameras are only accessible via host network, uncomment network_mode: host
+    # network_mode: host
     env_file:
       - .env
     command: >
@@ -187,6 +189,8 @@ services:
     volumes:
       - ./storage/nvr:/app/storage/nvr
       - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - edge-cv
     deploy:
       resources:
         limits:

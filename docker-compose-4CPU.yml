@@ -21,13 +21,13 @@ services:
     build: .
     container_name: bag_counter_cv
     restart: unless-stopped
-    # Edge PC: access host network for RTSP cameras
-    network_mode: host
-    # Or use explicit ports if host network unavailable:
-    # ports:
-    #   - "8000:8000"   # FastAPI
-    #   - "8501:8501"   # Streamlit kiosk
-    #   - "8765:8765"   # WebSocket
+    # Edge PC: use explicit ports to allow DNS resolution from other containers
+    ports:
+      - "8000:8000"   # FastAPI
+      - "8501:8501"   # Streamlit kiosk (fallback)
+      - "8765:8765"   # WebSocket
+    # For RTSP cameras on host, ensure camera IPs are reachable from container
+    # If cameras are on host network only, you may need network_mode: host instead
     environment:
       - PRIMARY_STREAM_URL=${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
       - SECONDARY_STREAM_URL=${SECONDARY_STREAM_URL:-rtsp://192.168.1.101:554/stream1}
@@ -128,12 +128,17 @@ services:
     environment:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
-      - WEBSOCKET_URL=ws://localhost:8765
+      - WEBSOCKET_URL=ws://edge-cv:8765
+      # Для Docker Compose используем RUN_MODE=docker, чтобы dashboard использовал 'edge-cv' как хост
+      - RUN_MODE=docker
+      - API_HOST=edge-cv
+      - API_PORT=8000
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
     depends_on:
       - redis
+      - edge-cv
     deploy:
       resources:
         limits:
@@ -150,7 +155,9 @@ services:
     image: jrottenberg/ffmpeg:6.1-alpine
     container_name: bag_counter_nvr
     restart: unless-stopped
-    network_mode: host
+    # Use bridge network instead of host to stay in same Docker network
+    # If RTSP cameras are only accessible via host network, uncomment network_mode: host
+    # network_mode: host
     command: >
       ffmpeg -hide_banner -loglevel error
       -rtsp_transport tcp
@@ -163,6 +170,8 @@ services:
     volumes:
       - ./storage/nvr:/app/storage/nvr
       - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - edge-cv
     deploy:
       resources:
         limits:
