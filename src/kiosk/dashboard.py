@@ -578,16 +578,17 @@ def render_class_breakdown(stats: dict):
 
 
 def render_live_video():
-    """Render live video stream placeholder."""
+    """Render live video stream from MJPEG endpoint."""
     st.markdown("### Live Camera Feed")
     
     if not st.session_state.live_video_enabled:
         st.info("👆 Enable live video in the sidebar to see real-time camera feed")
         return
     
-    # Get video stream URL from API
-    video_url = f"http://localhost:{settings.API_PORT}/api/v1/video/stream"
+    # Get video stream URL from API - use settings.API_BASE_URL for Docker network
+    video_url = f"{settings.API_BASE_URL}/api/v1/video/stream"
     
+    # Render video with HTML img tag for MJPEG stream
     st.markdown(f"""
     <div class="video-container">
         <div class="video-overlay">
@@ -596,12 +597,9 @@ def render_live_video():
                 LIVE
             </span>
         </div>
-        <img src="{video_url}" style="width: 100%; border-radius: 16px;" alt="Live stream">
+        <img src="{video_url}" style="width: 100%; height: auto; border-radius: 16px;" alt="Live stream">
     </div>
     """, unsafe_allow_html=True)
-    
-    # Auto-refresh video frame
-    time.sleep(0.1)
 
 
 def render_event_log(db: Session):

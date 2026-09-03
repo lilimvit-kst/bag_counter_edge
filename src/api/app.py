@@ -2,15 +2,18 @@
 FastAPI service for local stats and health.
 Now includes WebSocket support, Celery task integration, and Prometheus metrics.
 """
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, AsyncGenerator
 import asyncio
 import time
+import io
+import cv2
+import numpy as np
 
 from src.db.models import SessionLocal, Wagon, BagEvent, Shift
 from src.config import settings
@@ -28,6 +31,7 @@ from src.monitoring.metrics import (
     update_connected_clients,
     BAG_COUNT_TOTAL,
 )
+from src.capture.camera_stream import CameraStream
 
 app = FastAPI(title="Bag Counter Edge API")
 
@@ -212,3 +216,67 @@ async def broadcast_alert(alert_data: dict):
     """Broadcast an alert to all connected clients."""
     ws_manager = get_ws_manager()
     await ws_manager.broadcast_alert(alert_data)
+
+
+# ── Video Streaming Endpoint (MJPEG) ────────────────────────────────────────
+_camera_stream: Optional[CameraStream] = None
+
+def get_camera_stream() -> CameraStream:
+    """Get or create camera stream instance."""
+    global _camera_stream
+    if _camera_stream is None or not _camera_stream._running:
+        _camera_stream = CameraStream(
+            source=settings.PRIMARY_STREAM_URL,
+            name="video_feed",
+        )
+        _camera_stream.start()
+    return _camera_stream
+
+
+@app.get("/api/v1/video/stream")
+async def video_stream():
+    """
+    MJPEG video stream endpoint for live camera feed.
+    
+    Usage in browser/Streamlit:
+    <img src="/api/v1/video/stream" />
+    """
+    from starlette.responses import StreamingResponse
+    
+    async def generate_frames():
+        camera = get_camera_stream()
+        while True:
+            ok, frame, ts = camera.read()
+            if ok and frame is not None:
+                # Encode frame as JPEG
+                _, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+                )
+            else:
+                # Send placeholder frame if camera unavailable
+                placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(placeholder, "No Signal", (200, 240), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                _, buffer = cv2.imencode(".jpg", placeholder, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+                )
+            await asyncio.sleep(0.033)  # ~30 FPS
+    
+    return StreamingResponse(
+        generate_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-cache"}
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup camera stream on shutdown."""
+    global _camera_stream
+    if _camera_stream:
+        _camera_stream.stop()
+        _camera_stream = None

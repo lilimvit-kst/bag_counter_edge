@@ -144,12 +144,15 @@ services:
     environment:
       - PYTHONPATH=/app
       - REDIS_URL=redis://redis:6379/0
-      - WEBSOCKET_URL=ws://localhost:8765
+      - WEBSOCKET_URL=ws://edge-cv:8765
+      - API_HOST=edge-cv
+      - API_PORT=8000
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
     depends_on:
       - redis
+      - edge-cv
     deploy:
       resources:
         limits:
