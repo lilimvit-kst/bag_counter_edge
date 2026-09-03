@@ -25,20 +25,28 @@ class CameraStream:
     def __init__(
         self,
         source: str,
-        width: int = settings.FRAME_WIDTH,
-        height: int = settings.FRAME_HEIGHT,
-        fps: int = settings.FPS,
+        width: int | None = None,
+        height: int | None = None,
+        fps: int | None = None,
         name: str = "camera",
-        max_reconnect_attempts: int = settings.CAMERA_MAX_RECONNECT_ATTEMPTS,
-        reconnect_delay: float = settings.CAMERA_RECONNECT_DELAY,
+        max_reconnect_attempts: int | None = None,
+        reconnect_delay: float | None = None,
     ) -> None:
         self.source = source
-        self.width = width
-        self.height = height
-        self.fps = fps
+        self.width = width if width is not None else settings.CAMERA_WIDTH
+        self.height = height if height is not None else settings.CAMERA_HEIGHT
+        self.fps = fps if fps is not None else settings.CAMERA_FPS
         self.name = name
-        self.max_reconnect_attempts = max_reconnect_attempts
-        self.reconnect_delay = reconnect_delay
+        self.max_reconnect_attempts = (
+            max_reconnect_attempts 
+            if max_reconnect_attempts is not None 
+            else settings.CAMERA_MAX_RECONNECT_ATTEMPTS
+        )
+        self.reconnect_delay = (
+            reconnect_delay 
+            if reconnect_delay is not None 
+            else settings.CAMERA_RECONNECT_DELAY
+        )
 
         self._cap: Optional[cv2.VideoCapture] = None
         self._latest_frame: Optional[np.ndarray] = None

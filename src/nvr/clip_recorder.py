@@ -36,7 +36,7 @@ class NVRRecorder:
             "ffmpeg",
             "-hide_banner", "-loglevel", "error",
             "-rtsp_transport", "tcp",
-            "-i", settings.PRIMARY_STREAM_URL,
+            "-i", settings.CAMERA_SOURCE,
             "-c", "copy",
             "-f", "segment",
             "-segment_time", str(self.segment_time * 60),
@@ -117,7 +117,7 @@ class ClipRecorder:
             cmd = [
                 "ffmpeg", "-hide_banner", "-loglevel", "error",
                 "-rtsp_transport", "tcp",
-                "-i", settings.PRIMARY_STREAM_URL,
+                "-i", settings.CAMERA_SOURCE,
                 "-t", str(duration),
                 "-c", "copy", "-y", str(out_path),
             ]
