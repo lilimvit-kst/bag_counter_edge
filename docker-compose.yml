@@ -28,20 +28,36 @@ services:
     #   - "8000:8000"   # FastAPI
     #   - "8501:8501"   # Streamlit kiosk
     #   - "8765:8765"   # WebSocket
+    env_file:
+      - .env
     environment:
-      - PRIMARY_STREAM_URL=${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
-      - SECONDARY_STREAM_URL=${SECONDARY_STREAM_URL:-rtsp://192.168.1.101:554/stream1}
-      - FPS=${FPS:-25}
-      - DETECTION_MODEL=${DETECTION_MODEL:-yolov8n.pt}
+      - PRIMARY_STREAM_URL=${CAMERA_SOURCE:-rtsp://192.168.1.100:554/stream1}
+      - SECONDARY_STREAM_URL=${SECONDARY_STREAM_URL:-}
+      - CAMERA_WIDTH=${CAMERA_WIDTH:-1920}
+      - CAMERA_HEIGHT=${CAMERA_HEIGHT:-1080}
+      - CAMERA_FPS=${CAMERA_FPS:-30}
+      - YOLO_MODEL_PATH=${YOLO_MODEL_PATH:-models/yolov8n.pt}
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.5}
+      - IOU_THRESHOLD=${IOU_THRESHOLD:-0.45}
+      - TRIPWIRE_Y_RATIO=${TRIPWIRE_Y_RATIO:-0.75}
+      - HANDOVER_DISAPPEAR_FRAMES=${HANDOVER_DISAPPEAR_FRAMES:-10}
+      - ROI_X1_RATIO=${ROI_X1_RATIO:-0.1}
+      - ROI_X2_RATIO=${ROI_X2_RATIO:-0.9}
+      - ROI_Y1_RATIO=${ROI_Y1_RATIO:-0.2}
+      - ROI_Y2_RATIO=${ROI_Y2_RATIO:-0.9}
+      - NVR_PRE_EVENT_DURATION=${NVR_PRE_EVENT_DURATION:-5}
+      - NVR_POST_EVENT_DURATION=${NVR_POST_EVENT_DURATION:-10}
       - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - CELERY_ENABLED=true
       - WEBSOCKET_ENABLED=true
       # Security: require API_SECRET_KEY in production
       - API_SECRET_KEY=${API_SECRET_KEY:-change-me-in-production}
-      - API_ADMIN_USER=${API_ADMIN_USER:-admin}
-      - API_ADMIN_PASS=${API_ADMIN_PASS:-admin}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       # Logging configuration
-      - LOG_FORMAT=json
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./storage:/app/storage
       - ./models:/app/models:ro
@@ -151,10 +167,12 @@ services:
     container_name: bag_counter_nvr
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - .env
     command: >
       ffmpeg -hide_banner -loglevel error
       -rtsp_transport tcp
-      -i ${PRIMARY_STREAM_URL:-rtsp://192.168.1.100:554/stream1}
+      -i ${CAMERA_SOURCE:-rtsp://192.168.1.100:554/stream1}
       -c copy -f segment
       -segment_time 600
       -strftime 1
