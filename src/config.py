@@ -111,6 +111,15 @@ class Settings(BaseSettings):
     CELERY_ENABLED: bool = Field(default=False, env="CELERY_ENABLED")
     WEBSOCKET_ENABLED: bool = Field(default=True, env="WEBSOCKET_ENABLED")
     WEBSOCKET_PORT: int = 8765
+    
+    # Dashboard / API configuration (for kiosk service)
+    API_HOST: str = Field(default="localhost", env="API_HOST")
+    API_PORT: int = Field(default=8000, env="API_PORT")
+    
+    @property
+    def API_BASE_URL(self) -> str:
+        """Get base URL for API calls from dashboard."""
+        return f"http://{self.API_HOST}:{self.API_PORT}"
 
     class Config:
         env_file = ".env"
