@@ -10,31 +10,18 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+env/
 venv/
 .venv/
-.env/
-.pytest_cache/
-.mypy_cache/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
-coverage/
-htmlcov/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Logs
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
-
-# OS generated files
 .DS_Store
-Thumbs.db
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
 ```
