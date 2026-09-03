@@ -587,20 +587,21 @@ def render_live_video():
         return
     
     # Определяем базовый URL для API динамически
-    # Приоритет: 1) API_BASE_URL из env, 2) конструируем из API_HOST/API_PORT
-    api_base_url = os.getenv("API_BASE_URL")
+    # Логика приоритетов:
+    # 1. Если RUN_MODE=docker → используем http://edge-cv:<port>
+    # 2. Иначе конструируем из API_HOST:API_PORT (для local и network режимов)
+    # 3. API_BASE_URL игнорируется для явного контроля через API_HOST
     
-    if not api_base_url:
+    run_mode = os.getenv("RUN_MODE", "local")
+    
+    if run_mode == "docker":
+        api_port = os.getenv("API_PORT", "8000")
+        api_base_url = f"http://edge-cv:{api_port}"
+    else:
+        # Для local и network режимов используем API_HOST
         api_host = os.getenv("API_HOST", "localhost")
         api_port = os.getenv("API_PORT", "8000")
-        
-        # Если запускаемся внутри Docker Compose (есть переменная RUN_MODE=docker)
-        if os.getenv("RUN_MODE") == "docker":
-            api_base_url = f"http://edge-cv:{api_port}"
-        else:
-            # Локальный запуск или доступ из сети - используем API_HOST
-            # Пользователь должен установить API_HOST=IP_сервера в .env для доступа из сети
-            api_base_url = f"http://{api_host}:{api_port}"
+        api_base_url = f"http://{api_host}:{api_port}"
     
     video_url = f"{api_base_url}/api/v1/video/stream"
     
@@ -613,8 +614,11 @@ def render_live_video():
             return
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Cannot connect to video stream: {str(e)}")
-        st.warning(f"API_BASE_URL={api_base_url}")
-        st.info("💡 For local access: set API_HOST=localhost in .env\n💡 For network access: set API_HOST=<server_ip> in .env\n💡 For Docker Compose: set RUN_MODE=docker")
+        st.warning(f"Current API URL: {api_base_url}")
+        if run_mode == "docker":
+            st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
+        else:
+            st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
         return
     
     # Render video with HTML img tag for MJPEG stream
