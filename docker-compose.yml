@@ -133,14 +133,36 @@ services:
         max-size: "10m"
         max-file: "2"
 
+  # Nginx reverse proxy for unified access
+  nginx:
+    image: nginx:alpine
+    container_name: bag_counter_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - edge-cv
+      - dashboard
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   # Streamlit Operator Dashboard
   dashboard:
     build: .
     container_name: bag_counter_dashboard
     restart: unless-stopped
     command: ["streamlit", "run", "src/kiosk/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    ports:
-      - "8501:8501"
+    # No external port - accessed via nginx
     env_file:
       - .env
     environment:
@@ -149,12 +171,14 @@ services:
       - WEBSOCKET_URL=ws://edge-cv:8765
       - RUN_MODE=docker
       - INTERNAL_API_HOST=edge-cv
+      - NGINX_PROXY=true
     volumes:
       - ./storage:/app/storage
       - ./src:/app/src
     depends_on:
       - redis
       - edge-cv
+      - nginx
     deploy:
       resources:
         limits:
