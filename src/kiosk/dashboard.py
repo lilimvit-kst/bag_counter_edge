@@ -787,6 +787,18 @@ def main():
     with col2:
         if st.session_state.live_video_enabled:
             render_live_video()
+            
+            # Turn OFF button below video
+            st.markdown("<div style='margin-top: 16px;'>", unsafe_allow_html=True)
+            if st.button(
+                "⏹️ Выключить видео",
+                key="turn_off_video",
+                use_container_width=True,
+                help="Отключить трансляцию видео с камеры"
+            ):
+                st.session_state.live_video_enabled = False
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.markdown("""
             ### Live Preview
@@ -800,9 +812,22 @@ def main():
             ">
                 <div style="font-size: 48px; margin-bottom: 16px;">📷</div>
                 <p style="font-size: 14px;">Live video disabled</p>
-                <p style="font-size: 12px; margin-top: 8px;">Enable in sidebar to view</p>
+                <p style="font-size: 12px; margin-top: 8px;">Enable to view camera feed with detection</p>
             </div>
             """, unsafe_allow_html=True)
+            
+            # Turn ON button below placeholder
+            st.markdown("<div style='margin-top: 16px;'>", unsafe_allow_html=True)
+            if st.button(
+                "▶️ Включить видео",
+                key="turn_on_video",
+                use_container_width=True,
+                type="primary",
+                help="Включить трансляцию видео с камеры для наблюдения за детекцией мешков"
+            ):
+                st.session_state.live_video_enabled = True
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
         
         render_actions(db)
     
