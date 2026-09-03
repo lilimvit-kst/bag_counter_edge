@@ -585,20 +585,35 @@ def render_live_video():
         st.info("👆 Enable live video in the sidebar to see real-time camera feed")
         return
     
-    # Get video stream URL from API - use settings.API_BASE_URL for Docker network
-    video_url = f"{settings.API_BASE_URL}/api/v1/video/stream"
+    # Определяем базовый URL для API динамически
+    # Приоритет: 1) API_BASE_URL из env, 2) конструируем из API_HOST/API_PORT
+    api_base_url = os.getenv("API_BASE_URL")
+    
+    if not api_base_url:
+        api_host = os.getenv("API_HOST", "localhost")
+        api_port = os.getenv("API_PORT", "8000")
+        
+        # Если запускаемся внутри Docker Compose (есть переменная RUN_MODE=docker)
+        if os.getenv("RUN_MODE") == "docker":
+            api_base_url = f"http://edge-cv:{api_port}"
+        else:
+            # Локальный запуск или доступ из сети - используем API_HOST
+            # Пользователь должен установить API_HOST=IP_сервера в .env для доступа из сети
+            api_base_url = f"http://{api_host}:{api_port}"
+    
+    video_url = f"{api_base_url}/api/v1/video/stream"
     
     # Try to fetch a frame to test connectivity
     try:
         response = requests.get(video_url, timeout=2, stream=True)
         if response.status_code != 200:
             st.error(f"❌ Video stream unavailable (HTTP {response.status_code})")
-            st.warning(f"Check that edge-cv service is running and API_HOST={settings.API_HOST}")
+            st.warning(f"Check that API server is running and API_HOST={os.getenv('API_HOST', 'localhost')}")
             return
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Cannot connect to video stream: {str(e)}")
-        st.warning(f"API_BASE_URL={settings.API_BASE_URL}")
-        st.info("💡 Make sure 'edge-cv' container is running and accessible from 'dashboard' container")
+        st.warning(f"API_BASE_URL={api_base_url}")
+        st.info("💡 For local access: set API_HOST=localhost in .env\n💡 For network access: set API_HOST=<server_ip> in .env\n💡 For Docker Compose: set RUN_MODE=docker")
         return
     
     # Render video with HTML img tag for MJPEG stream
