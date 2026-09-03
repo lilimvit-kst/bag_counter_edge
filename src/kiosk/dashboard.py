@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import threading
 
+from dotenv import load_dotenv
 import streamlit as st
 import requests
 from sqlalchemy import func
@@ -34,6 +35,9 @@ from sqlalchemy.sql import text
 
 from src.db.models import SessionLocal, Shift, Wagon, BagEvent, BagClass
 from src.config import settings
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Page config - must be first Streamlit command
 st.set_page_config(
