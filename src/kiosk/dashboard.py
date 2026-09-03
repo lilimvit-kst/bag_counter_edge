@@ -592,20 +592,27 @@ def render_live_video():
     
     # Определяем базовый URL для API динамически
     # Логика приоритетов:
-    # 1. Если RUN_MODE=docker → используем http://edge-cv:<port>
-    # 2. Иначе конструируем из API_HOST:API_PORT (для local и network режимов)
-    # 3. API_BASE_URL игнорируется для явного контроля через API_HOST
+    # 1. Явные переменные DASHBOARD_API_HOST и DASHBOARD_API_PORT имеют наивысший приоритет
+    # 2. Если их нет, используем RUN_MODE=docker → http://edge-cv:<port>
+    # 3. Иначе конструируем из API_HOST:API_PORT (для local и network режимов)
     
-    run_mode = os.getenv("RUN_MODE", "local")
+    dashboard_api_host = os.getenv("DASHBOARD_API_HOST")
+    dashboard_api_port = os.getenv("DASHBOARD_API_PORT")
     
-    if run_mode == "docker":
-        api_port = os.getenv("API_PORT", "8000")
-        api_base_url = f"http://edge-cv:{api_port}"
+    if dashboard_api_host and dashboard_api_port:
+        # Явные настройки для Dashboard имеют приоритет
+        api_base_url = f"http://{dashboard_api_host}:{dashboard_api_port}"
     else:
-        # Для local и network режимов используем API_HOST
-        api_host = os.getenv("API_HOST", "localhost")
-        api_port = os.getenv("API_PORT", "8000")
-        api_base_url = f"http://{api_host}:{api_port}"
+        run_mode = os.getenv("RUN_MODE", "local")
+        
+        if run_mode == "docker":
+            api_port = os.getenv("API_PORT", "8000")
+            api_base_url = f"http://edge-cv:{api_port}"
+        else:
+            # Для local и network режимов используем API_HOST
+            api_host = os.getenv("API_HOST", "localhost")
+            api_port = os.getenv("API_PORT", "8000")
+            api_base_url = f"http://{api_host}:{api_port}"
     
     video_url = f"{api_base_url}/api/v1/video/stream"
     
@@ -614,12 +621,14 @@ def render_live_video():
         response = requests.get(video_url, timeout=2, stream=True)
         if response.status_code != 200:
             st.error(f"❌ Video stream unavailable (HTTP {response.status_code})")
-            st.warning(f"Check that API server is running and API_HOST={os.getenv('API_HOST', 'localhost')}")
+            st.warning(f"Check that API server is running at {api_base_url}")
             return
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Cannot connect to video stream: {str(e)}")
         st.warning(f"Current API URL: {api_base_url}")
-        if run_mode == "docker":
+        if dashboard_api_host and dashboard_api_port:
+            st.info(f"💡 Using explicit DASHBOARD_API_HOST={dashboard_api_host}:{dashboard_api_port} - check that this address is reachable from your browser")
+        elif run_mode == "docker":
             st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
         else:
             st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
