@@ -43,6 +43,10 @@ COPY models/ ./models/
 # Ensure storage directories exist
 RUN mkdir -p storage/clips storage/db storage/nvr storage/logs
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
@@ -50,5 +54,5 @@ ENV PYTHONUNBUFFERED=1
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)" || exit 1
 
-# Default: run the CV pipeline
-CMD ["python", "-m", "src.main"]
+# Run both CV pipeline and FastAPI server
+ENTRYPOINT ["/entrypoint.sh"]
