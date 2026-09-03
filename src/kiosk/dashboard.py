@@ -591,34 +591,54 @@ def render_live_video():
         return
     
     # Определяем базовый URL для API динамически
-    # Логика приоритетов:
-    # 1. Явные переменные DASHBOARD_API_HOST и DASHBOARD_API_PORT имеют наивысший приоритет
-    # 2. Если RUN_MODE=docker, используем INTERNAL_API_HOST (по умолчанию edge-cv) для внутренних запросов
-    # 3. Иначе конструируем из API_HOST:API_PORT (для local и network режимов)
+    # При использовании nginx все запросы идут через прокси на localhost:80
+    # Nginx сам маршрутизирует запросы к нужным сервисам
     
-    dashboard_api_host = os.getenv("DASHBOARD_API_HOST")
-    dashboard_api_port = os.getenv("DASHBOARD_API_PORT")
+    # Проверяем, запущен ли nginx (режим с прокси)
+    nginx_proxy = os.getenv("NGINX_PROXY", "false").lower() == "true"
     
-    if dashboard_api_host and dashboard_api_port:
-        # Явные настройки для Dashboard имеют приоритет
-        api_base_url = f"http://{dashboard_api_host}:{dashboard_api_port}"
+    if nginx_proxy:
+        # Все запросы через nginx на порт 80
+        api_base_url = "http://localhost:80"
+        video_url = f"{api_base_url}/api/v1/video/stream"
     else:
-        run_mode = os.getenv("RUN_MODE", "local")
+        # Старая логика для обратной совместимости
+        # Логика приоритетов:
+        # 1. Явные переменные DASHBOARD_API_HOST и DASHBOARD_API_PORT имеют наивысший приоритет
+        # 2. Иначе используем EXTERNAL_API_HOST (IP сервера) для доступа из внешней сети
+        # 3. Для обратной совместимости: RUN_MODE=docker использует INTERNAL_API_HOST
         
-        if run_mode == "docker":
-            # Для режима docker используем внутреннее имя сервиса для запросов от контейнера
-            # INTERNAL_API_HOST по умолчанию = edge-cv (из .env)
-            internal_api_host = os.getenv("INTERNAL_API_HOST", "edge-cv")
-            api_port = os.getenv("API_PORT", "8000")
-            api_base_url = f"http://{internal_api_host}:{api_port}"
+        dashboard_api_host = os.getenv("DASHBOARD_API_HOST")
+        dashboard_api_port = os.getenv("DASHBOARD_API_PORT")
+        
+        if dashboard_api_host and dashboard_api_port:
+            # Явные настройки для Dashboard имеют приоритет
+            api_base_url = f"http://{dashboard_api_host}:{dashboard_api_port}"
         else:
-            # Для local и network режимов используем API_HOST
-            # Это должен быть IP-адрес или домен, доступный из вашей сети
-            api_host = os.getenv("API_HOST", "localhost")
+            # EXTERNAL_API_HOST - это IP-адрес сервера, доступный из вашей сети
+            # По умолчанию пытаемся определить автоматически или используем localhost
+            external_api_host = os.getenv("EXTERNAL_API_HOST")
             api_port = os.getenv("API_PORT", "8000")
-            api_base_url = f"http://{api_host}:{api_port}"
-    
-    video_url = f"{api_base_url}/api/v1/video/stream"
+            
+            if external_api_host:
+                # Используем внешний IP для доступа из сети
+                api_base_url = f"http://{external_api_host}:{api_port}"
+            else:
+                # Обратная совместимость: пробуем старую логику
+                run_mode = os.getenv("RUN_MODE", "local")
+                
+                if run_mode == "docker":
+                    # Для режима docker используем внутреннее имя сервиса для запросов от контейнера
+                    # INTERNAL_API_HOST по умолчанию = edge-cv (из .env)
+                    internal_api_host = os.getenv("INTERNAL_API_HOST", "edge-cv")
+                    api_base_url = f"http://{internal_api_host}:{api_port}"
+                else:
+                    # Для local и network режимов используем API_HOST
+                    # Это должен быть IP-адрес или домен, доступный из вашей сети
+                    api_host = os.getenv("API_HOST", "localhost")
+                    api_base_url = f"http://{api_host}:{api_port}"
+        
+        video_url = f"{api_base_url}/api/v1/video/stream"
     
     # Try to fetch a frame to test connectivity
     try:
@@ -630,7 +650,9 @@ def render_live_video():
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Cannot connect to video stream: {str(e)}")
         st.warning(f"Current API URL: {api_base_url}")
-        if dashboard_api_host and dashboard_api_port:
+        if nginx_proxy:
+            st.info("💡 Running with Nginx proxy - make sure nginx container is running and healthy")
+        elif dashboard_api_host and dashboard_api_port:
             st.info(f"💡 Using explicit DASHBOARD_API_HOST={dashboard_api_host}:{dashboard_api_port} - check that this address is reachable from your browser")
         elif run_mode == "docker":
             st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
