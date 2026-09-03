@@ -52,6 +52,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - CELERY_ENABLED=true
       - WEBSOCKET_ENABLED=true
+      - USE_GUI=false
       # Security: require API_SECRET_KEY in production
       - API_SECRET_KEY=${API_SECRET_KEY:-change-me-in-production}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
