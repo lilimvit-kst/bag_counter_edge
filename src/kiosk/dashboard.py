@@ -606,10 +606,13 @@ def render_live_video():
         run_mode = os.getenv("RUN_MODE", "local")
         
         if run_mode == "docker":
+            # Для режима docker используем имя сервиса edge-cv
+            # Работает только когда браузер находится внутри той же Docker-сети
             api_port = os.getenv("API_PORT", "8000")
             api_base_url = f"http://edge-cv:{api_port}"
         else:
             # Для local и network режимов используем API_HOST
+            # Это должен быть IP-адрес или домен, доступный из вашей сети
             api_host = os.getenv("API_HOST", "localhost")
             api_port = os.getenv("API_PORT", "8000")
             api_base_url = f"http://{api_host}:{api_port}"
