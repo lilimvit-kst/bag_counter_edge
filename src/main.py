@@ -4,6 +4,7 @@ Runs the detector -> tracker -> volume -> tripwire -> handover loop.
 """
 from __future__ import annotations
 
+import os
 import signal
 import sys
 import time
@@ -171,7 +172,14 @@ class BagCountingPipeline:
     def run(self) -> None:
         self.running = True
         self.camera.start()
-        logger.info("Pipeline started. Press 'q' in preview window to stop.")
+        
+        # Check if running in headless mode (no display)
+        use_gui = settings.USE_GUI and "DISPLAY" in os.environ
+        
+        if use_gui:
+            logger.info("Pipeline started. Press 'q' in preview window to stop.")
+        else:
+            logger.info("Pipeline started in headless mode (no GUI).")
 
         while self.running:
             ok, frame, ts = self.camera.read()
@@ -210,11 +218,15 @@ class BagCountingPipeline:
                 if self.handover.evaluate(t, w, h):
                     self._count_bag(t)
 
-            # 5. Visualise
-            self._draw_overlay(tracks)
-            cv2.imshow("Bag Counter Edge", self.frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                self.running = False
+            # 5. Visualise (only if GUI is available)
+            if use_gui:
+                self._draw_overlay(tracks)
+                cv2.imshow("Bag Counter Edge", self.frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    self.running = False
+            else:
+                # Small sleep to prevent CPU spinning in headless mode
+                time.sleep(0.033)  # ~30 FPS limit
 
         self.shutdown()
 

@@ -115,6 +115,8 @@ class Settings(BaseSettings):
     # Dashboard / API configuration (for kiosk service)
     API_HOST: str = Field(default="localhost", env="API_HOST")
     API_PORT: int = Field(default=8000, env="API_PORT")
+    # GUI settings (disable in Docker/headless environments)
+    USE_GUI: bool = Field(default=True, env="USE_GUI")
     
     @property
     def API_BASE_URL(self) -> str:
