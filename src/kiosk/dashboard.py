@@ -599,7 +599,8 @@ def render_live_video():
     
     if nginx_proxy:
         # Все запросы через nginx на порт 80
-        api_base_url = "http://localhost:80"
+        # Используем имя сервиса 'nginx' для подключения внутри Docker-сети
+        api_base_url = "http://nginx:80"
         video_url = f"{api_base_url}/api/v1/video/stream"
     else:
         # Старая логика для обратной совместимости
