@@ -176,6 +176,30 @@ header {visibility: hidden;}
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     background: #0f172a;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.video-container:hover {
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+}
+
+.video-container.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    border-radius: 0;
+    background: #000;
+}
+
+.video-container.fullscreen img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 0;
 }
 
 .video-overlay {
@@ -189,6 +213,38 @@ header {visibility: hidden;}
     font-size: 12px;
     font-weight: 500;
     backdrop-filter: blur(4px);
+    z-index: 10;
+}
+
+.video-container.fullscreen .video-overlay {
+    top: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.fullscreen-hint {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.video-container:hover .fullscreen-hint {
+    opacity: 1;
+}
+
+.video-container.fullscreen .fullscreen-hint {
+    bottom: 20px;
+    right: 20px;
 }
 
 .live-indicator {
@@ -318,6 +374,8 @@ def init_session_state():
         st.session_state.live_video_enabled = False
     if "auto_scroll" not in st.session_state:
         st.session_state.auto_scroll = True
+    if "video_fullscreen" not in st.session_state:
+        st.session_state.video_fullscreen = False
 
 
 # ── DB helpers ──────────────────────────────────────────────────────────────
@@ -661,8 +719,11 @@ def render_live_video():
     
     # Render video with HTML img tag for MJPEG stream
     # При использовании nginx видео будет доступно по относительному URL
+    fullscreen_class = "fullscreen" if st.session_state.video_fullscreen else ""
+    hint_text = "Click to exit fullscreen" if st.session_state.video_fullscreen else "Click to expand"
+    
     st.markdown(f"""
-    <div class="video-container">
+    <div class="video-container {fullscreen_class}" id="videoContainer" onclick="toggleFullscreen()">
         <div class="video-overlay">
             <span class="live-indicator">
                 <span class="live-dot"></span>
@@ -670,7 +731,59 @@ def render_live_video():
             </span>
         </div>
         <img src="{video_url}" style="width: 100%; height: auto; border-radius: 16px;" alt="Live stream">
+        <div class="fullscreen-hint">⛶ {hint_text}</div>
     </div>
+    
+    <script>
+    function toggleFullscreen() {{
+        const container = document.getElementById('videoContainer');
+        const isFullscreen = container.classList.contains('fullscreen');
+        
+        if (isFullscreen) {{
+            container.classList.remove('fullscreen');
+            // Update Streamlit session state via query param hack
+            const url = new URL(window.location);
+            url.searchParams.set('_st_fullscreen', '0');
+            window.history.pushState({{}}, '', url);
+        }} else {{
+            container.classList.add('fullscreen');
+            const url = new URL(window.location);
+            url.searchParams.set('_st_fullscreen', '1');
+            window.history.pushState({{}}, '', url);
+        }}
+        
+        // Force re-render by triggering a small scroll
+        window.dispatchEvent(new Event('scroll'));
+    }}
+    
+    // Listen for URL changes to sync with Streamlit
+    let lastFullscreenState = null;
+    setInterval(() => {{
+        const url = new URL(window.location);
+        const fsParam = url.searchParams.get('_st_fullscreen');
+        if (fsParam !== lastFullscreenState) {{
+            lastFullscreenState = fsParam;
+            const container = document.getElementById('videoContainer');
+            if (container) {{
+                if (fsParam === '1') {{
+                    container.classList.add('fullscreen');
+                }} else {{
+                    container.classList.remove('fullscreen');
+                }}
+            }}
+        }}
+    }}, 500);
+    
+    // Handle ESC key to exit fullscreen
+    document.addEventListener('keydown', (e) => {{
+        if (e.key === 'Escape') {{
+            const container = document.getElementById('videoContainer');
+            if (container && container.classList.contains('fullscreen')) {{
+                toggleFullscreen();
+            }}
+        }}
+    }});
+    </script>
     """, unsafe_allow_html=True)
 
 
@@ -820,6 +933,17 @@ Model: {settings.DETECTION_MODEL}""")
 def main():
     # Initialize session state
     init_session_state()
+    
+    # Check URL params for fullscreen state sync (Streamlit 1.24+)
+    try:
+        query_params = st.query_params.to_dict()
+        fs_param = query_params.get('_st_fullscreen', None)
+        if fs_param == '1':
+            st.session_state.video_fullscreen = True
+        elif fs_param == '0':
+            st.session_state.video_fullscreen = False
+    except Exception:
+        pass  # Fallback for older Streamlit versions
     
     # Inject custom CSS
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
