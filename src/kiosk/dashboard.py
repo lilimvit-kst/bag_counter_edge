@@ -717,12 +717,45 @@ def render_live_video():
                 st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
             return
     
-    # Render video with HTML img tag for MJPEG stream
-    # При использовании nginx видео будет доступно по относительному URL
+    # Используем hidden checkbox для управления состоянием fullscreen через Streamlit
+    # Checkbox скрыт визуально, но клики по видео будут эмулировать его переключение
+    if "video_fullscreen" not in st.session_state:
+        st.session_state.video_fullscreen = False
+    
+    # Скрытый checkbox для триггера rerun при клике
+    _ = st.checkbox(
+        "Fullscreen mode",
+        value=st.session_state.video_fullscreen,
+        key="__fullscreen_cb__",
+        label_visibility="hidden"
+    )
+    
+    # Проверяем изменение состояния checkbox и обновляем session_state
+    if st.session_state.__fullscreen_cb__ != st.session_state.video_fullscreen:
+        st.session_state.video_fullscreen = st.session_state.__fullscreen_cb__
+        # Принудительный rerun не нужен - Streamlit сам сделает rerun при изменении checkbox
+    
     fullscreen_class = "fullscreen" if st.session_state.video_fullscreen else ""
     hint_text = "Click to exit fullscreen" if st.session_state.video_fullscreen else "Click to expand"
     
     st.markdown(f"""
+    <style>
+    /* Скрываем checkbox визуально */
+    div[data-testid="stWidgetLabel"] label:has(span:contains("Fullscreen mode")),
+    input[key="__fullscreen_cb__"],
+    .stCheckbox:has(input[key="__fullscreen_cb__"]) {{
+        display: none !important;
+        visibility: hidden;
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        height: 0;
+        width: 0;
+        padding: 0;
+        margin: 0;
+    }}
+    </style>
+    
     <div class="video-container {fullscreen_class}" id="videoContainer">
         <div class="video-overlay">
             <span class="live-indicator">
@@ -736,67 +769,56 @@ def render_live_video():
     
     <script>
     (function() {{
-        // Remove any existing listener to avoid duplicates
-        const oldContainer = document.getElementById('videoContainer');
-        if (oldContainer && oldContainer._listenerAdded) {{
-            oldContainer.removeEventListener('click', window._toggleFullscreenHandler);
+        // Находим скрытый checkbox Streamlit
+        function findCheckbox() {{
+            const allInputs = document.querySelectorAll('input[type="checkbox"]');
+            for (let i = 0; i < allInputs.length; i++) {{
+                const parent = allInputs[i].closest('.stCheckbox');
+                if (parent && parent.textContent.includes('Fullscreen mode')) {{
+                    return allInputs[i];
+                }}
+            }}
+            return null;
         }}
         
         function toggleFullscreen() {{
             const container = document.getElementById('videoContainer');
             if (!container) return;
             
+            const checkbox = findCheckbox();
             const isFullscreen = container.classList.contains('fullscreen');
             
-            if (isFullscreen) {{
-                container.classList.remove('fullscreen');
-                // Update Streamlit session state via query param hack
-                const url = new URL(window.location);
-                url.searchParams.set('_st_fullscreen', '0');
-                window.history.pushState({{}}, '', url);
-            }} else {{
-                container.classList.add('fullscreen');
-                const url = new URL(window.location);
-                url.searchParams.set('_st_fullscreen', '1');
-                window.history.pushState({{}}, '', url);
+            if (checkbox) {{
+                // Переключаем состояние checkbox
+                checkbox.checked = !isFullscreen;
+                // Эмулируем событие изменения для триггера Streamlit rerun
+                checkbox.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                // Также кликаем для надежности
+                checkbox.click();
             }}
             
-            // Force re-render by triggering a small scroll
-            window.dispatchEvent(new Event('scroll'));
+            // Визуально переключаем класс сразу (без ожидания rerun)
+            if (isFullscreen) {{
+                container.classList.remove('fullscreen');
+            }} else {{
+                container.classList.add('fullscreen');
+            }}
         }}
         
-        // Store handler globally for cleanup
-        window._toggleFullscreenHandler = toggleFullscreen;
-        
-        // Add click listener after DOM is ready
+        // Добавляем обработчик клика на контейнер с видео
         const container = document.getElementById('videoContainer');
-        if (container && !container._listenerAdded) {{
-            container.addEventListener('click', toggleFullscreen);
-            container._listenerAdded = true;
+        if (container && !container._fsListenerAdded) {{
+            container.style.cursor = 'pointer';
+            container.addEventListener('click', (e) => {{
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+            }});
+            container._fsListenerAdded = true;
         }}
         
-        // Listen for URL changes to sync with Streamlit
-        let lastFullscreenState = null;
-        if (!window._fullscreenInterval) {{
-            window._fullscreenInterval = setInterval(() => {{
-                const url = new URL(window.location);
-                const fsParam = url.searchParams.get('_st_fullscreen');
-                if (fsParam !== lastFullscreenState) {{
-                    lastFullscreenState = fsParam;
-                    const container = document.getElementById('videoContainer');
-                    if (container) {{
-                        if (fsParam === '1') {{
-                            container.classList.add('fullscreen');
-                        }} else {{
-                            container.classList.remove('fullscreen');
-                        }}
-                    }}
-                }}
-            }}, 500);
-        }}
-        
-        // Handle ESC key to exit fullscreen
-        if (!window._escKeyListenerAdded) {{
+        // Обработка клавиши Escape
+        if (!window._fsEscListenerAdded) {{
             document.addEventListener('keydown', (e) => {{
                 if (e.key === 'Escape') {{
                     const container = document.getElementById('videoContainer');
@@ -805,7 +827,7 @@ def render_live_video():
                     }}
                 }}
             }});
-            window._escKeyListenerAdded = true;
+            window._fsEscListenerAdded = true;
         }}
     }})();
     </script>
