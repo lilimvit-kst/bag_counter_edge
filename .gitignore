@@ -4,25 +4,46 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-venv/
 .venv/
+venv/
 env/
-ENV/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+.env
+.env.local
+.env.*
+requirements.txt.bak
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs
 *.log
-.git/modules/
-*.sublime-workspace
-.pytest_cache/
-.hypothesis/
+
+# OS generated files
 .DS_Store
 Thumbs.db
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Testing
+.coverage
+htmlcov/
+.coverage.*
+.nox/
+.tox/
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
 ```
