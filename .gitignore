@@ -1,4 +1,17 @@
-```gitignore
+```
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
 # Dependencies
 node_modules/
 .venv/
@@ -8,45 +21,26 @@ __pycache__/
 .pytest_cache/
 .julia/
 zig*/
-target/
-.gradle/
+julia-*/
 
 # Build artifacts
 dist/
 build/
-*.pyc
-*.class
+target/
 *.o
+*.obj
+*.out
 *.exe
 *.dll
 *.so
 *.a
-*.obj
-*.out
-
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# Logs
-*.log
+*.class
+*.pyc
 
 # Coverage
 coverage/
 htmlcov/
 .coverage
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Compressed files
 *.zip
@@ -71,4 +65,12 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
 ```
