@@ -156,10 +156,11 @@ services:
 
   # Streamlit Operator Dashboard
   dashboard:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
     container_name: bag_counter_dashboard
     restart: unless-stopped
-    command: ["streamlit", "run", "src/kiosk/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
     # No external port - accessed via nginx
     env_file:
       - .env
