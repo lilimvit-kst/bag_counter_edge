@@ -649,50 +649,29 @@ def render_live_video():
         return
     
     # Определяем базовый URL для API динамически
-    # При использовании nginx все запросы идут через прокси на localhost:80
-    # Nginx сам маршрутизирует запросы к нужным сервисам
-    
-    # Проверяем, запущен ли nginx (режим с прокси)
     nginx_proxy = os.getenv("NGINX_PROXY", "false").lower() == "true"
     
     if nginx_proxy:
-        # Все запросы через nginx на порт 80
-        # Используем относительный URL, чтобы браузер обращался к тому же хосту
         video_url = "/api/v1/video/stream"
     else:
-        # Старая логика для обратной совместимости
-        # Логика приоритетов:
-        # 1. Явные переменные DASHBOARD_API_HOST и DASHBOARD_API_PORT имеют наивысший приоритет
-        # 2. Иначе используем EXTERNAL_API_HOST (IP сервера) для доступа из внешней сети
-        # 3. Для обратной совместимости: RUN_MODE=docker использует INTERNAL_API_HOST
-        
         dashboard_api_host = os.getenv("DASHBOARD_API_HOST")
         dashboard_api_port = os.getenv("DASHBOARD_API_PORT")
         
         if dashboard_api_host and dashboard_api_port:
-            # Явные настройки для Dashboard имеют приоритет
             api_base_url = f"http://{dashboard_api_host}:{dashboard_api_port}"
         else:
-            # EXTERNAL_API_HOST - это IP-адрес сервера, доступный из вашей сети
-            # По умолчанию пытаемся определить автоматически или используем localhost
             external_api_host = os.getenv("EXTERNAL_API_HOST")
             api_port = os.getenv("API_PORT", "8000")
             
             if external_api_host:
-                # Используем внешний IP для доступа из сети
                 api_base_url = f"http://{external_api_host}:{api_port}"
             else:
-                # Обратная совместимость: пробуем старую логику
                 run_mode = os.getenv("RUN_MODE", "local")
                 
                 if run_mode == "docker":
-                    # Для режима docker используем внутреннее имя сервиса для запросов от контейнера
-                    # INTERNAL_API_HOST по умолчанию = edge-cv (из .env)
                     internal_api_host = os.getenv("INTERNAL_API_HOST", "edge-cv")
                     api_base_url = f"http://{internal_api_host}:{api_port}"
                 else:
-                    # Для local и network режимов используем API_HOST
-                    # Это должен быть IP-адрес или домен, доступный из вашей сети
                     api_host = os.getenv("API_HOST", "localhost")
                     api_base_url = f"http://{api_host}:{api_port}"
         
@@ -709,38 +688,69 @@ def render_live_video():
         except requests.exceptions.RequestException as e:
             st.error(f"❌ Cannot connect to video stream: {str(e)}")
             st.warning(f"Current API URL: {api_base_url}")
-            if dashboard_api_host and dashboard_api_port:
-                st.info(f"💡 Using explicit DASHBOARD_API_HOST={dashboard_api_host}:{dashboard_api_port} - check that this address is reachable from your browser")
-            elif run_mode == "docker":
-                st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
-            else:
-                st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
             return
     
-    # Инициализация состояния полноэкранного режима
-    if "video_fullscreen" not in st.session_state:
-        st.session_state.video_fullscreen = False
+    # JavaScript для полноэкранного режима - чистый JS без checkbox
+    js_code = """
+    <script>
+    (function() {
+        // Удаляем предыдущие обработчики если есть
+        const oldScript = document.getElementById('video-fullscreen-script');
+        if (oldScript) oldScript.remove();
+        
+        function initVideoFullscreen() {
+            const wrapper = document.getElementById('videoWrapper');
+            if (!wrapper) {
+                setTimeout(initVideoFullscreen, 100);
+                return;
+            }
+            
+            const img = wrapper.querySelector('img');
+            
+            // Обработчик клика по видео
+            wrapper.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Переключаем класс fullscreen
+                const isFullscreen = wrapper.classList.contains('fullscreen');
+                if (isFullscreen) {
+                    wrapper.classList.remove('fullscreen');
+                } else {
+                    wrapper.classList.add('fullscreen');
+                }
+            });
+            
+            // Обработчик клавиши Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const wrapper = document.getElementById('videoWrapper');
+                    if (wrapper && wrapper.classList.contains('fullscreen')) {
+                        wrapper.classList.remove('fullscreen');
+                    }
+                }
+            });
+            
+            // Блокируем drag-and-drop изображения
+            if (img) {
+                img.addEventListener('dragstart', function(e) {
+                    e.preventDefault();
+                });
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initVideoFullscreen);
+        } else {
+            initVideoFullscreen();
+        }
+    })();
+    </script>
+    """
     
-    # Уникальный ID для checkbox чтобы точно его найти
-    checkbox_key = "fs_toggle_" + str(int(time.time() * 1000) % 100000)
-    
-    # Скрытый checkbox для управления состоянием
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    /* Полностью скрываем checkbox и его label */
-    #checkbox-container-{checkbox_key} {{
-        position: absolute !important;
-        left: -9999px !important;
-        top: -9999px !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-    }}
-    
-    .video-wrapper {{
+    .video-wrapper {
         position: relative;
         width: 100%;
         max-width: 900px;
@@ -748,9 +758,10 @@ def render_live_video():
         border-radius: 16px;
         overflow: hidden;
         background: #000;
-    }}
+        cursor: pointer;
+    }
     
-    .video-wrapper.fullscreen {{
+    .video-wrapper.fullscreen {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
@@ -763,32 +774,34 @@ def render_live_video():
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-    }}
+        background: #000;
+    }
     
-    .video-wrapper img {{
+    .video-wrapper img {
         width: 100%;
         height: auto;
         display: block;
         user-select: none;
         -webkit-user-drag: none;
-    }}
+    }
     
-    .video-wrapper.fullscreen img {{
+    .video-wrapper.fullscreen img {
         max-width: 100%;
         max-height: 100%;
         width: auto;
         height: auto;
         object-fit: contain;
-    }}
+    }
     
-    .video-overlay {{
+    .video-overlay {
         position: absolute;
         top: 20px;
         left: 20px;
         z-index: 10;
-    }}
+        pointer-events: none;
+    }
     
-    .live-indicator {{
+    .live-indicator {
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -799,27 +812,28 @@ def render_live_video():
         font-size: 14px;
         font-weight: 600;
         animation: pulse 2s infinite;
-    }}
+        pointer-events: none;
+    }
     
-    @keyframes pulse {{
-        0%, 100% {{ opacity: 1; }}
-        50% {{ opacity: 0.7; }}
-    }}
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
     
-    .live-dot {{
+    .live-dot {
         width: 8px;
         height: 8px;
         background: white;
         border-radius: 50%;
         animation: blink 1s infinite;
-    }}
+    }
     
-    @keyframes blink {{
-        0%, 100% {{ opacity: 1; }}
-        50% {{ opacity: 0.3; }}
-    }}
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
     
-    .fullscreen-hint {{
+    .fullscreen-hint {
         position: absolute;
         bottom: 20px;
         right: 20px;
@@ -834,128 +848,20 @@ def render_live_video():
         pointer-events: none;
         z-index: 10;
         backdrop-filter: blur(4px);
-    }}
+    }
     
-    .video-wrapper:hover .fullscreen-hint {{
+    .video-wrapper:hover .fullscreen-hint {
         opacity: 1;
-    }}
+    }
     
-    .video-wrapper.fullscreen .fullscreen-hint {{
+    .video-wrapper.fullscreen .fullscreen-hint {
         display: none;
-    }}
+    }
     </style>
-    
-    <div id="checkbox-container-{checkbox_key}">
     """, unsafe_allow_html=True)
     
-    # Создаём checkbox в скрытом контейнере
-    _ = st.checkbox(
-        "Fullscreen toggle",
-        value=st.session_state.video_fullscreen,
-        key=checkbox_key,
-        label_visibility="collapsed",
-        help="Toggle fullscreen mode"
-    )
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Проверяем изменение состояния
-    if checkbox_key in st.session_state:
-        if st.session_state[checkbox_key] != st.session_state.video_fullscreen:
-            st.session_state.video_fullscreen = st.session_state[checkbox_key]
-            st.rerun()
-    
-    fullscreen_class = "fullscreen" if st.session_state.video_fullscreen else ""
-    hint_text = "⛶ Click to exit fullscreen (or press Esc)" if st.session_state.video_fullscreen else "⛶ Click to expand fullscreen"
-    
-    # JavaScript для обработки кликов
-    js_code = f"""
-    <script>
-    (function() {{
-        // Ждём загрузки DOM
-        function init() {{
-            const wrapper = document.getElementById('videoWrapper');
-            if (!wrapper) {{
-                setTimeout(init, 100);
-                return;
-            }}
-            
-            const img = wrapper.querySelector('img');
-            const checkboxKey = '{checkbox_key}';
-            
-            // Находим checkbox Streamlit по ключу
-            function findCheckbox() {{
-                const inputs = document.querySelectorAll('input[type="checkbox"]');
-                for (let i = 0; i < inputs.length; i++) {{
-                    if (inputs[i].id && inputs[i].id.includes(checkboxKey)) {{
-                        return inputs[i];
-                    }}
-                }}
-                // Альтернативный поиск по data-testid
-                const allInputs = document.querySelectorAll('input');
-                for (let i = 0; i < allInputs.length; i++) {{
-                    const parent = allInputs[i].closest('[data-testid="stWidgetLabel"]');
-                    if (parent && parent.textContent.includes('Fullscreen toggle')) {{
-                        return allInputs[i];
-                    }}
-                }}
-                return null;
-            }}
-            
-            // Обработчик клика
-            let clickTimeout = null;
-            wrapper.addEventListener('click', function(e) {{
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Предотвращаем двойные срабатывания
-                if (clickTimeout) return;
-                
-                const isFullscreen = wrapper.classList.contains('fullscreen');
-                const checkbox = findCheckbox();
-                
-                if (checkbox) {{
-                    checkbox.checked = !isFullscreen;
-                    // Создаём и диспатчим событие change
-                    const event = new Event('change', {{ bubbles: true, cancelable: true }});
-                    checkbox.dispatchEvent(event);
-                    // Кликаем для триггера Streamlit
-                    checkbox.click();
-                }}
-                
-                // Визуально переключаем сразу
-                wrapper.classList.toggle('fullscreen');
-                
-                // Блокируем повторные клики на короткое время
-                clickTimeout = setTimeout(() => {{ clickTimeout = null; }}, 300);
-            }});
-            
-            // Обработчик Escape
-            document.addEventListener('keydown', function(e) {{
-                if (e.key === 'Escape' && wrapper.classList.contains('fullscreen')) {{
-                    wrapper.click();
-                }}
-            }});
-            
-            // Блокируем drag-and-drop изображения
-            if (img) {{
-                img.addEventListener('dragstart', function(e) {{
-                    e.preventDefault();
-                }});
-            }}
-        }}
-        
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', init);
-        }} else {{
-            init();
-        }}
-    }})();
-    </script>
-    """
-    
     st.markdown(f"""
-    <div class="video-wrapper {fullscreen_class}" id="videoWrapper" style="cursor: pointer;">
+    <div class="video-wrapper" id="videoWrapper">
         <div class="video-overlay">
             <span class="live-indicator">
                 <span class="live-dot"></span>
@@ -963,7 +869,7 @@ def render_live_video():
             </span>
         </div>
         <img src="{video_url}" alt="Live stream" draggable="false">
-        <div class="fullscreen-hint">{hint_text}</div>
+        <div class="fullscreen-hint">⛶ Click to expand/exit fullscreen (or press Esc)</div>
     </div>
     {js_code}
     """, unsafe_allow_html=True)
