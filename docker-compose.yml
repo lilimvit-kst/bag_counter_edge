@@ -25,7 +25,6 @@ services:
       - "8765:8765"   # WebSocket
     # For RTSP cameras on host, ensure camera IPs are reachable from container
     # If cameras are on host network only, you may need network_mode: host instead
-    gpus: all
     env_file:
       - .env
     environment:
