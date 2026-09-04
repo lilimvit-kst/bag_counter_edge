@@ -717,120 +717,255 @@ def render_live_video():
                 st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
             return
     
-    # Используем hidden checkbox для управления состоянием fullscreen через Streamlit
-    # Checkbox скрыт визуально, но клики по видео будут эмулировать его переключение
+    # Инициализация состояния полноэкранного режима
     if "video_fullscreen" not in st.session_state:
         st.session_state.video_fullscreen = False
     
-    # Скрытый checkbox для триггера rerun при клике
-    _ = st.checkbox(
-        "Fullscreen mode",
-        value=st.session_state.video_fullscreen,
-        key="__fullscreen_cb__",
-        label_visibility="hidden"
-    )
+    # Уникальный ID для checkbox чтобы точно его найти
+    checkbox_key = "fs_toggle_" + str(int(time.time() * 1000) % 100000)
     
-    # Проверяем изменение состояния checkbox и обновляем session_state
-    if st.session_state.__fullscreen_cb__ != st.session_state.video_fullscreen:
-        st.session_state.video_fullscreen = st.session_state.__fullscreen_cb__
-        # Принудительный rerun не нужен - Streamlit сам сделает rerun при изменении checkbox
-    
-    fullscreen_class = "fullscreen" if st.session_state.video_fullscreen else ""
-    hint_text = "Click to exit fullscreen" if st.session_state.video_fullscreen else "Click to expand"
-    
+    # Скрытый checkbox для управления состоянием
     st.markdown(f"""
     <style>
-    /* Скрываем checkbox визуально */
-    div[data-testid="stWidgetLabel"] label:has(span:contains("Fullscreen mode")),
-    input[key="__fullscreen_cb__"],
-    .stCheckbox:has(input[key="__fullscreen_cb__"]) {{
-        display: none !important;
-        visibility: hidden;
+    /* Полностью скрываем checkbox и его label */
+    #checkbox-container-{checkbox_key} {{
+        position: absolute !important;
+        left: -9999px !important;
+        top: -9999px !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }}
+    
+    .video-wrapper {{
+        position: relative;
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #000;
+    }}
+    
+    .video-wrapper.fullscreen {{
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 999999 !important;
+        max-width: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }}
+    
+    .video-wrapper img {{
+        width: 100%;
+        height: auto;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+    }}
+    
+    .video-wrapper.fullscreen img {{
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+    }}
+    
+    .video-overlay {{
         position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 10;
+    }}
+    
+    .live-indicator {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(220, 38, 38, 0.9);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        animation: pulse 2s infinite;
+    }}
+    
+    @keyframes pulse {{
+        0%, 100% {{ opacity: 1; }}
+        50% {{ opacity: 0.7; }}
+    }}
+    
+    .live-dot {{
+        width: 8px;
+        height: 8px;
+        background: white;
+        border-radius: 50%;
+        animation: blink 1s infinite;
+    }}
+    
+    @keyframes blink {{
+        0%, 100% {{ opacity: 1; }}
+        50% {{ opacity: 0.3; }}
+    }}
+    
+    .fullscreen-hint {{
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.75);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
         opacity: 0;
+        transition: opacity 0.3s ease;
         pointer-events: none;
-        height: 0;
-        width: 0;
-        padding: 0;
-        margin: 0;
+        z-index: 10;
+        backdrop-filter: blur(4px);
+    }}
+    
+    .video-wrapper:hover .fullscreen-hint {{
+        opacity: 1;
+    }}
+    
+    .video-wrapper.fullscreen .fullscreen-hint {{
+        display: none;
     }}
     </style>
     
-    <div class="video-container {fullscreen_class}" id="videoContainer">
+    <div id="checkbox-container-{checkbox_key}">
+    """, unsafe_allow_html=True)
+    
+    # Создаём checkbox в скрытом контейнере
+    _ = st.checkbox(
+        "Fullscreen toggle",
+        value=st.session_state.video_fullscreen,
+        key=checkbox_key,
+        label_visibility="collapsed",
+        help="Toggle fullscreen mode"
+    )
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Проверяем изменение состояния
+    if checkbox_key in st.session_state:
+        if st.session_state[checkbox_key] != st.session_state.video_fullscreen:
+            st.session_state.video_fullscreen = st.session_state[checkbox_key]
+            st.rerun()
+    
+    fullscreen_class = "fullscreen" if st.session_state.video_fullscreen else ""
+    hint_text = "⛶ Click to exit fullscreen (or press Esc)" if st.session_state.video_fullscreen else "⛶ Click to expand fullscreen"
+    
+    # JavaScript для обработки кликов
+    js_code = f"""
+    <script>
+    (function() {{
+        // Ждём загрузки DOM
+        function init() {{
+            const wrapper = document.getElementById('videoWrapper');
+            if (!wrapper) {{
+                setTimeout(init, 100);
+                return;
+            }}
+            
+            const img = wrapper.querySelector('img');
+            const checkboxKey = '{checkbox_key}';
+            
+            // Находим checkbox Streamlit по ключу
+            function findCheckbox() {{
+                const inputs = document.querySelectorAll('input[type="checkbox"]');
+                for (let i = 0; i < inputs.length; i++) {{
+                    if (inputs[i].id && inputs[i].id.includes(checkboxKey)) {{
+                        return inputs[i];
+                    }}
+                }}
+                // Альтернативный поиск по data-testid
+                const allInputs = document.querySelectorAll('input');
+                for (let i = 0; i < allInputs.length; i++) {{
+                    const parent = allInputs[i].closest('[data-testid="stWidgetLabel"]');
+                    if (parent && parent.textContent.includes('Fullscreen toggle')) {{
+                        return allInputs[i];
+                    }}
+                }}
+                return null;
+            }}
+            
+            // Обработчик клика
+            let clickTimeout = null;
+            wrapper.addEventListener('click', function(e) {{
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Предотвращаем двойные срабатывания
+                if (clickTimeout) return;
+                
+                const isFullscreen = wrapper.classList.contains('fullscreen');
+                const checkbox = findCheckbox();
+                
+                if (checkbox) {{
+                    checkbox.checked = !isFullscreen;
+                    // Создаём и диспатчим событие change
+                    const event = new Event('change', {{ bubbles: true, cancelable: true }});
+                    checkbox.dispatchEvent(event);
+                    // Кликаем для триггера Streamlit
+                    checkbox.click();
+                }}
+                
+                // Визуально переключаем сразу
+                wrapper.classList.toggle('fullscreen');
+                
+                // Блокируем повторные клики на короткое время
+                clickTimeout = setTimeout(() => {{ clickTimeout = null; }}, 300);
+            }});
+            
+            // Обработчик Escape
+            document.addEventListener('keydown', function(e) {{
+                if (e.key === 'Escape' && wrapper.classList.contains('fullscreen')) {{
+                    wrapper.click();
+                }}
+            }});
+            
+            // Блокируем drag-and-drop изображения
+            if (img) {{
+                img.addEventListener('dragstart', function(e) {{
+                    e.preventDefault();
+                }});
+            }}
+        }}
+        
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', init);
+        }} else {{
+            init();
+        }}
+    }})();
+    </script>
+    """
+    
+    st.markdown(f"""
+    <div class="video-wrapper {fullscreen_class}" id="videoWrapper" style="cursor: pointer;">
         <div class="video-overlay">
             <span class="live-indicator">
                 <span class="live-dot"></span>
                 LIVE
             </span>
         </div>
-        <img src="{video_url}" style="width: 100%; height: auto; border-radius: 16px;" alt="Live stream">
-        <div class="fullscreen-hint">⛶ {hint_text}</div>
+        <img src="{video_url}" alt="Live stream" draggable="false">
+        <div class="fullscreen-hint">{hint_text}</div>
     </div>
-    
-    <script>
-    (function() {{
-        // Находим скрытый checkbox Streamlit
-        function findCheckbox() {{
-            const allInputs = document.querySelectorAll('input[type="checkbox"]');
-            for (let i = 0; i < allInputs.length; i++) {{
-                const parent = allInputs[i].closest('.stCheckbox');
-                if (parent && parent.textContent.includes('Fullscreen mode')) {{
-                    return allInputs[i];
-                }}
-            }}
-            return null;
-        }}
-        
-        function toggleFullscreen() {{
-            const container = document.getElementById('videoContainer');
-            if (!container) return;
-            
-            const checkbox = findCheckbox();
-            const isFullscreen = container.classList.contains('fullscreen');
-            
-            if (checkbox) {{
-                // Переключаем состояние checkbox
-                checkbox.checked = !isFullscreen;
-                // Эмулируем событие изменения для триггера Streamlit rerun
-                checkbox.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                // Также кликаем для надежности
-                checkbox.click();
-            }}
-            
-            // Визуально переключаем класс сразу (без ожидания rerun)
-            if (isFullscreen) {{
-                container.classList.remove('fullscreen');
-            }} else {{
-                container.classList.add('fullscreen');
-            }}
-        }}
-        
-        // Добавляем обработчик клика на контейнер с видео
-        const container = document.getElementById('videoContainer');
-        if (container && !container._fsListenerAdded) {{
-            container.style.cursor = 'pointer';
-            container.addEventListener('click', (e) => {{
-                e.preventDefault();
-                e.stopPropagation();
-                toggleFullscreen();
-            }});
-            container._fsListenerAdded = true;
-        }}
-        
-        // Обработка клавиши Escape
-        if (!window._fsEscListenerAdded) {{
-            document.addEventListener('keydown', (e) => {{
-                if (e.key === 'Escape') {{
-                    const container = document.getElementById('videoContainer');
-                    if (container && container.classList.contains('fullscreen')) {{
-                        toggleFullscreen();
-                    }}
-                }}
-            }});
-            window._fsEscListenerAdded = true;
-        }}
-    }})();
-    </script>
+    {js_code}
     """, unsafe_allow_html=True)
 
 
