@@ -4,8 +4,8 @@ opencv-python>=4.8.0
 Pillow>=10.0.0
 python-dotenv>=1.0.0
 
-# CV / ML
-ultralytics>=8.2.0
+# CV / ML (CUDA support)
+ultralytics[cuda]>=8.2.0
 filterpy>=1.4.5
 scipy>=1.11.0
 
