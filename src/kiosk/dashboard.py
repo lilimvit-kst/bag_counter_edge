@@ -599,7 +599,7 @@ def render_class_breakdown(stats: dict):
 
 
 def render_live_video():
-    """Render live video stream from MJPEG endpoint."""
+    """Render live video stream from MJPEG endpoint with native fullscreen support."""
     st.markdown("### Live Camera Feed")
     
     if not st.session_state.live_video_enabled:
@@ -648,143 +648,166 @@ def render_live_video():
             st.warning(f"Current API URL: {api_base_url}")
             return
     
-    # JavaScript для полноэкранного режима - чистый JS без checkbox
-    js_code = """
-    <script>
-    (function() {
-        // Удаляем предыдущие обработчики если есть
-        const oldScript = document.getElementById('video-fullscreen-script');
-        if (oldScript) oldScript.remove();
-        
-        function initVideoFullscreen() {
-            const wrapper = document.getElementById('videoWrapper');
-            if (!wrapper) {
-                setTimeout(initVideoFullscreen, 100);
-                return;
-            }
-            
-            const img = wrapper.querySelector('img');
-            
-            // Обработчик клика по видео
-            wrapper.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
+    # Используем components.html для надежной работы JavaScript
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body, html {{
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: #000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: sans-serif;
+            }}
+            #video-container {{
+                position: relative;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                background: #000;
+            }}
+            #live-feed {{
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
+                box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            }}
+            .overlay-icon {{
+                position: absolute;
+                bottom: 20px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.6);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 8px;
+                font-size: 14px;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.3s;
+                backdrop-filter: blur(4px);
+            }}
+            #video-container:hover .overlay-icon {{
+                opacity: 1;
+            }}
+            /* Native fullscreen styles */
+            :fullscreen #video-container,
+            :-webkit-full-screen #video-container,
+            :-moz-full-screen #video-container,
+            :-ms-fullscreen #video-container {{
+                width: 100vw;
+                height: 100vh;
+                background: #000;
+            }}
+            :fullscreen #live-feed,
+            :-webkit-full-screen #live-feed,
+            :-moz-full-screen #live-feed,
+            :-ms-fullscreen #live-feed {{
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="video-container">
+            <img id="live-feed" src="{video_url}" alt="Live Feed" crossorigin="anonymous">
+            <div class="overlay-icon">⛶ Click to toggle fullscreen</div>
+        </div>
+
+        <script>
+            (function() {{
+                const container = document.getElementById('video-container');
+                const img = document.getElementById('live-feed');
                 
-                // Переключаем класс fullscreen
-                const isFullscreen = wrapper.classList.contains('fullscreen');
-                if (isFullscreen) {
-                    wrapper.classList.remove('fullscreen');
-                } else {
-                    wrapper.classList.add('fullscreen');
-                }
-            });
-            
-            // Обработчик клавиши Escape
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    const wrapper = document.getElementById('videoWrapper');
-                    if (wrapper && wrapper.classList.contains('fullscreen')) {
-                        wrapper.classList.remove('fullscreen');
-                    }
-                }
-            });
-            
-            // Блокируем drag-and-drop изображения
-            if (img) {
-                img.addEventListener('dragstart', function(e) {
+                let clickCount = 0;
+                let lastClickTime = 0;
+
+                function toggleFullscreen() {{
+                    const isFullscreen = document.fullscreenElement || 
+                                         document.webkitFullscreenElement || 
+                                         document.mozFullScreenElement || 
+                                         document.msFullscreenElement;
+                    
+                    if (!isFullscreen) {{
+                        // Enter fullscreen
+                        if (container.requestFullscreen) {{
+                            container.requestFullscreen().catch(err => {{
+                                console.log('Fullscreen request failed:', err);
+                            }});
+                        }} else if (container.webkitRequestFullscreen) {{
+                            container.webkitRequestFullscreen();
+                        }} else if (container.mozRequestFullScreen) {{
+                            container.mozRequestFullScreen();
+                        }} else if (container.msRequestFullscreen) {{
+                            container.msRequestFullscreen();
+                        }}
+                    }} else {{
+                        // Exit fullscreen
+                        if (document.exitFullscreen) {{
+                            document.exitFullscreen();
+                        }} else if (document.webkitExitFullscreen) {{
+                            document.webkitExitFullscreen();
+                        }} else if (document.mozCancelFullScreen) {{
+                            document.mozCancelFullScreen();
+                        }} else if (document.msExitFullscreen) {{
+                            document.msExitFullscreen();
+                        }}
+                    }}
+                }}
+
+                // Click handler with double-click prevention
+                container.addEventListener('click', function(e) {{
                     e.preventDefault();
-                });
-            }
-        }
-        
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initVideoFullscreen);
-        } else {
-            initVideoFullscreen();
-        }
-    })();
-    </script>
+                    e.stopPropagation();
+                    
+                    const now = Date.now();
+                    if (now - lastClickTime < 250) {{
+                        clickCount = 0;
+                        return;
+                    }}
+                    clickCount++;
+                    lastClickTime = now;
+                    
+                    if (clickCount === 1) {{
+                        setTimeout(function() {{
+                            if (clickCount === 1) {{
+                                toggleFullscreen();
+                            }}
+                            clickCount = 0;
+                        }}, 250);
+                    }}
+                }});
+
+                // ESC key handler - browser handles this natively, but we ensure clean state
+                document.addEventListener('keydown', function(e) {{
+                    if (e.key === 'Escape') {{
+                        // Browser will exit fullscreen automatically
+                    }}
+                }});
+
+                // Prevent image drag
+                img.addEventListener('dragstart', function(e) {{
+                    e.preventDefault();
+                }});
+            }})();
+        </script>
+    </body>
+    </html>
     """
     
-    st.markdown("""
-    <style>
-    .video-wrapper {
-        position: relative;
-        width: 100%;
-        max-width: 900px;
-        margin: 0 auto;
-        border-radius: 16px;
-        overflow: hidden;
-        background: #000;
-        cursor: pointer;
-    }
-    
-    .video-wrapper.fullscreen {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        z-index: 999999 !important;
-        max-width: none !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: #000;
-    }
-    
-    .video-wrapper img {
-        width: 100%;
-        height: auto;
-        display: block;
-        user-select: none;
-        -webkit-user-drag: none;
-    }
-    
-    .video-wrapper.fullscreen img {
-        max-width: 100%;
-        max-height: 100%;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-    }
-    
-    .fullscreen-hint {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.75);
-        color: white;
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        pointer-events: none;
-        z-index: 10;
-        backdrop-filter: blur(4px);
-    }
-    
-    .video-wrapper:hover .fullscreen-hint {
-        opacity: 1;
-    }
-    
-    .video-wrapper.fullscreen .fullscreen-hint {
-        display: none;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div class="video-wrapper" id="videoWrapper">
-        <img src="{video_url}" alt="Live stream" draggable="false">
-        <div class="fullscreen-hint">⛶ Click to expand/exit fullscreen (or press Esc)</div>
-    </div>
-    {js_code}
-    """, unsafe_allow_html=True)
+    # Render component with fixed height
+    import streamlit.components.v1 as components
+    components.html(html_code, height=450, scrolling=False)
 
 
 def render_event_log(db: Session):
