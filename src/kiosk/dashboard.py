@@ -723,7 +723,7 @@ def render_live_video():
     hint_text = "Click to exit fullscreen" if st.session_state.video_fullscreen else "Click to expand"
     
     st.markdown(f"""
-    <div class="video-container {fullscreen_class}" id="videoContainer" onclick="toggleFullscreen()">
+    <div class="video-container {fullscreen_class}" id="videoContainer">
         <div class="video-overlay">
             <span class="live-indicator">
                 <span class="live-dot"></span>
@@ -735,54 +735,79 @@ def render_live_video():
     </div>
     
     <script>
-    function toggleFullscreen() {{
+    (function() {{
+        // Remove any existing listener to avoid duplicates
+        const oldContainer = document.getElementById('videoContainer');
+        if (oldContainer && oldContainer._listenerAdded) {{
+            oldContainer.removeEventListener('click', window._toggleFullscreenHandler);
+        }}
+        
+        function toggleFullscreen() {{
+            const container = document.getElementById('videoContainer');
+            if (!container) return;
+            
+            const isFullscreen = container.classList.contains('fullscreen');
+            
+            if (isFullscreen) {{
+                container.classList.remove('fullscreen');
+                // Update Streamlit session state via query param hack
+                const url = new URL(window.location);
+                url.searchParams.set('_st_fullscreen', '0');
+                window.history.pushState({{}}, '', url);
+            }} else {{
+                container.classList.add('fullscreen');
+                const url = new URL(window.location);
+                url.searchParams.set('_st_fullscreen', '1');
+                window.history.pushState({{}}, '', url);
+            }}
+            
+            // Force re-render by triggering a small scroll
+            window.dispatchEvent(new Event('scroll'));
+        }}
+        
+        // Store handler globally for cleanup
+        window._toggleFullscreenHandler = toggleFullscreen;
+        
+        // Add click listener after DOM is ready
         const container = document.getElementById('videoContainer');
-        const isFullscreen = container.classList.contains('fullscreen');
-        
-        if (isFullscreen) {{
-            container.classList.remove('fullscreen');
-            // Update Streamlit session state via query param hack
-            const url = new URL(window.location);
-            url.searchParams.set('_st_fullscreen', '0');
-            window.history.pushState({{}}, '', url);
-        }} else {{
-            container.classList.add('fullscreen');
-            const url = new URL(window.location);
-            url.searchParams.set('_st_fullscreen', '1');
-            window.history.pushState({{}}, '', url);
+        if (container && !container._listenerAdded) {{
+            container.addEventListener('click', toggleFullscreen);
+            container._listenerAdded = true;
         }}
         
-        // Force re-render by triggering a small scroll
-        window.dispatchEvent(new Event('scroll'));
-    }}
-    
-    // Listen for URL changes to sync with Streamlit
-    let lastFullscreenState = null;
-    setInterval(() => {{
-        const url = new URL(window.location);
-        const fsParam = url.searchParams.get('_st_fullscreen');
-        if (fsParam !== lastFullscreenState) {{
-            lastFullscreenState = fsParam;
-            const container = document.getElementById('videoContainer');
-            if (container) {{
-                if (fsParam === '1') {{
-                    container.classList.add('fullscreen');
-                }} else {{
-                    container.classList.remove('fullscreen');
+        // Listen for URL changes to sync with Streamlit
+        let lastFullscreenState = null;
+        if (!window._fullscreenInterval) {{
+            window._fullscreenInterval = setInterval(() => {{
+                const url = new URL(window.location);
+                const fsParam = url.searchParams.get('_st_fullscreen');
+                if (fsParam !== lastFullscreenState) {{
+                    lastFullscreenState = fsParam;
+                    const container = document.getElementById('videoContainer');
+                    if (container) {{
+                        if (fsParam === '1') {{
+                            container.classList.add('fullscreen');
+                        }} else {{
+                            container.classList.remove('fullscreen');
+                        }}
+                    }}
                 }}
-            }}
+            }}, 500);
         }}
-    }}, 500);
-    
-    // Handle ESC key to exit fullscreen
-    document.addEventListener('keydown', (e) => {{
-        if (e.key === 'Escape') {{
-            const container = document.getElementById('videoContainer');
-            if (container && container.classList.contains('fullscreen')) {{
-                toggleFullscreen();
-            }}
+        
+        // Handle ESC key to exit fullscreen
+        if (!window._escKeyListenerAdded) {{
+            document.addEventListener('keydown', (e) => {{
+                if (e.key === 'Escape') {{
+                    const container = document.getElementById('videoContainer');
+                    if (container && container.classList.contains('fullscreen')) {{
+                        toggleFullscreen();
+                    }}
+                }}
+            }});
+            window._escKeyListenerAdded = true;
         }}
-    }});
+    }})();
     </script>
     """, unsafe_allow_html=True)
 
