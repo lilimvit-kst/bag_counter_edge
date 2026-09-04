@@ -142,7 +142,7 @@ FRAME_PROCESSING_SUMMARY = Summary(
 def record_bag_detected(bag_class: str, wagon_id: Optional[int] = None, shift_id: Optional[int] = None):
     """Record a bag detection event."""
     BAG_COUNT_TOTAL.labels(
-        class=bag_class,
+        bag_class=bag_class,
         wagon_id=wagon_id or 'unknown',
         shift_id=shift_id or 'unknown'
     ).inc()
