@@ -57,6 +57,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       # Logging configuration
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # GPU support for NVIDIA
+      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - ./storage:/app/storage
       - ./models:/app/models:ro
@@ -71,6 +73,10 @@ services:
         reservations:
           cpus: "0.8"
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     logging:
       driver: "json-file"
       options:

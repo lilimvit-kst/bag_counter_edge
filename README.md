@@ -534,11 +534,15 @@ docker-compose build
 # Запуск всех сервисов
 docker-compose up -d
 
+# Запуск с поддержкой GPU (требуется NVIDIA Container Toolkit)
+# Убедитесь, что драйверы NVIDIA установлены: nvidia-smi
+docker-compose up -d
+
 # Просмотр логов
 docker-compose logs -f
 
 # Логи конкретного сервиса
-docker-compose logs -f worker
+docker-compose logs -f edge-cv
 
 # Остановка всех сервисов
 docker-compose down
@@ -546,6 +550,25 @@ docker-compose down
 # Остановка с удалением томов (данные будут потеряны)
 docker-compose down -v
 ```
+
+### Проверка использования GPU
+
+```bash
+# Проверка доступности GPU в контейнере
+docker exec bag_counter_cv nvidia-smi
+
+# Проверка использования CUDA через Python
+docker exec bag_counter_cv python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+
+# Проверка через YOLOv8
+docker exec bag_counter_cv python -c "from ultralytics import YOLO; model = YOLO('models/yolov8n.pt'); print('Device:', model.device)"
+```
+
+**Требования для GPU:**
+1. Установленные драйверы NVIDIA на хосте
+2. [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+3. Поддерживаемая видеокарта с CUDA compute capability >= 6.0
+
 
 ### Переменные окружения для Docker
 
