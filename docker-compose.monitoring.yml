@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   # Prometheus Server for metrics collection
