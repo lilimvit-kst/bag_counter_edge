@@ -599,9 +599,8 @@ def render_live_video():
     
     if nginx_proxy:
         # Все запросы через nginx на порт 80
-        # Используем имя сервиса 'nginx' для подключения внутри Docker-сети
-        api_base_url = "http://nginx:80"
-        video_url = f"{api_base_url}/api/v1/video/stream"
+        # Используем относительный URL, чтобы браузер обращался к тому же хосту
+        video_url = "/api/v1/video/stream"
     else:
         # Старая логика для обратной совместимости
         # Логика приоритетов:
@@ -641,27 +640,27 @@ def render_live_video():
         
         video_url = f"{api_base_url}/api/v1/video/stream"
     
-    # Try to fetch a frame to test connectivity
-    try:
-        response = requests.get(video_url, timeout=2, stream=True)
-        if response.status_code != 200:
-            st.error(f"❌ Video stream unavailable (HTTP {response.status_code})")
-            st.warning(f"Check that API server is running at {api_base_url}")
+    # Try to fetch a frame to test connectivity (only for non-nginx mode)
+    if not nginx_proxy:
+        try:
+            response = requests.get(video_url, timeout=2, stream=True)
+            if response.status_code != 200:
+                st.error(f"❌ Video stream unavailable (HTTP {response.status_code})")
+                st.warning(f"Check that API server is running at {api_base_url}")
+                return
+        except requests.exceptions.RequestException as e:
+            st.error(f"❌ Cannot connect to video stream: {str(e)}")
+            st.warning(f"Current API URL: {api_base_url}")
+            if dashboard_api_host and dashboard_api_port:
+                st.info(f"💡 Using explicit DASHBOARD_API_HOST={dashboard_api_host}:{dashboard_api_port} - check that this address is reachable from your browser")
+            elif run_mode == "docker":
+                st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
+            else:
+                st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
             return
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Cannot connect to video stream: {str(e)}")
-        st.warning(f"Current API URL: {api_base_url}")
-        if nginx_proxy:
-            st.info("💡 Running with Nginx proxy - make sure nginx container is running and healthy")
-        elif dashboard_api_host and dashboard_api_port:
-            st.info(f"💡 Using explicit DASHBOARD_API_HOST={dashboard_api_host}:{dashboard_api_port} - check that this address is reachable from your browser")
-        elif run_mode == "docker":
-            st.info("💡 Running in Docker mode - make sure dashboard and edge-cv are in the same Docker network")
-        else:
-            st.info(f"💡 Running in {run_mode} mode - check that API_HOST={api_host} is correct and reachable from your browser")
-        return
     
     # Render video with HTML img tag for MJPEG stream
+    # При использовании nginx видео будет доступно по относительному URL
     st.markdown(f"""
     <div class="video-container">
         <div class="video-overlay">
