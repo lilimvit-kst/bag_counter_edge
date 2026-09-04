@@ -117,8 +117,8 @@ PROCESSING_TIME_HISTOGRAM = Histogram(
 API_LATENCY_HISTOGRAM = Histogram(
     'bag_counter_api_latency_seconds',
     'API request latency',
+    ['method', 'endpoint'],
     buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
-    labels=['method', 'endpoint'],
     registry=registry
 )
 
