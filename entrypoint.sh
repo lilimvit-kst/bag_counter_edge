@@ -10,14 +10,20 @@ echo "Starting FastAPI server on port 8000..."
 uvicorn src.api.app:app --host 0.0.0.0 --port 8000 &
 FASTAPI_PID=$!
 
-# Give API server time to start
-sleep 2
+# Wait for API server to be ready (max 10 seconds)
+echo "Waiting for API server to start..."
+for i in {1..10}; do
+    if python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" 2>/dev/null; then
+        echo "✓ API server is ready!"
+        break
+    fi
+    if [ $i -eq 10 ]; then
+        echo "⚠ API server starting (may need more time)..."
+        break
+    fi
+    sleep 1
+done
 
-# Start CV pipeline in foreground
+# Start CV pipeline in foreground (replaces this shell process)
 echo "Starting CV pipeline..."
-python -m src.main
-
-# Cleanup on exit
-echo "Stopping services..."
-kill $FASTAPI_PID 2>/dev/null || true
-wait $FASTAPI_PID 2>/dev/null || true
+exec python -m src.main
