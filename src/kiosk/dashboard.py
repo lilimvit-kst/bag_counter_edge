@@ -170,7 +170,7 @@ header {visibility: hidden;}
 }
 
 /* Video container */
-.video-container {
+.video-wrapper {
     position: relative;
     border-radius: 16px;
     overflow: hidden;
@@ -180,11 +180,11 @@ header {visibility: hidden;}
     transition: all 0.3s ease;
 }
 
-.video-container:hover {
+.video-wrapper:hover {
     box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
 }
 
-.video-container.fullscreen {
+.video-wrapper.fullscreen {
     position: fixed;
     top: 0;
     left: 0;
@@ -195,32 +195,11 @@ header {visibility: hidden;}
     background: #000;
 }
 
-.video-container.fullscreen img {
+.video-wrapper.fullscreen img {
     width: 100%;
     height: 100%;
     object-fit: contain;
     border-radius: 0;
-}
-
-.video-overlay {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 500;
-    backdrop-filter: blur(4px);
-    z-index: 10;
-}
-
-.video-container.fullscreen .video-overlay {
-    top: 20px;
-    right: 20px;
-    padding: 8px 16px;
-    font-size: 14px;
 }
 
 .fullscreen-hint {
@@ -238,34 +217,13 @@ header {visibility: hidden;}
     z-index: 10;
 }
 
-.video-container:hover .fullscreen-hint {
+.video-wrapper:hover .fullscreen-hint {
     opacity: 1;
 }
 
-.video-container.fullscreen .fullscreen-hint {
+.video-wrapper.fullscreen .fullscreen-hint {
     bottom: 20px;
     right: 20px;
-}
-
-.live-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #ef4444;
-    font-weight: 600;
-}
-
-.live-dot {
-    width: 8px;
-    height: 8px;
-    background: #ef4444;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
 }
 
 /* Action buttons */
@@ -793,46 +751,6 @@ def render_live_video():
         object-fit: contain;
     }
     
-    .video-overlay {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        z-index: 10;
-        pointer-events: none;
-    }
-    
-    .live-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(220, 38, 38, 0.9);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 600;
-        animation: pulse 2s infinite;
-        pointer-events: none;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-    
-    .live-dot {
-        width: 8px;
-        height: 8px;
-        background: white;
-        border-radius: 50%;
-        animation: blink 1s infinite;
-    }
-    
-    @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
-    
     .fullscreen-hint {
         position: absolute;
         bottom: 20px;
@@ -862,12 +780,6 @@ def render_live_video():
     
     st.markdown(f"""
     <div class="video-wrapper" id="videoWrapper">
-        <div class="video-overlay">
-            <span class="live-indicator">
-                <span class="live-dot"></span>
-                LIVE
-            </span>
-        </div>
         <img src="{video_url}" alt="Live stream" draggable="false">
         <div class="fullscreen-hint">⛶ Click to expand/exit fullscreen (or press Esc)</div>
     </div>
