@@ -6,6 +6,8 @@ venv/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
+dist/
+build/
 target/
 .gradle/
 
@@ -13,6 +15,7 @@ target/
 *.log
 *.tmp
 *.swp
+*.swo
 
 # Environment
 .env
@@ -23,21 +26,20 @@ target/
 .vscode/
 .idea/
 
-# Build artifacts
-dist/
-build/
+# System
+.DS_Store
+Thumbs.db
+
+# Compiled files
 *.pyc
+*.class
 *.o
-*.obj
 *.exe
 *.dll
 *.so
 *.a
+*.obj
 *.out
-
-# System files
-.DS_Store
-Thumbs.db
 
 # Coverage
 coverage/
@@ -63,4 +65,8 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
