@@ -14,20 +14,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Set environment for pip
-ENV PIP_NO_CACHE_DIR=0
+ENV PIP_NO_CACHE_DIR=1
 ENV PIP_USER=0
 
 # Copy only requirements first (for better caching)
 COPY requirements.txt .
 
 # Install dependencies in separate layers for better caching
+# Layer 1: Upgrade pip
 RUN pip install --upgrade pip
-# Install numpy and torch first (they are large and benefit most from caching)
+
+# Layer 2: Install numpy (pinned version, benefits most from caching)
 RUN pip install numpy==1.26.4
+
+# Layer 3: Install PyTorch with CUDA support (large packages, cache critical)
 RUN pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
-# Install core web dependencies explicitly to ensure they're available
+
+# Layer 4: Install core web dependencies explicitly to ensure availability
 RUN pip install fastapi>=0.111.0 uvicorn[standard]>=0.30.0
-# Install remaining requirements (opencv, utils, etc.)
+
+# Layer 5: Install remaining requirements (opencv, utils, etc.)
 RUN pip install -r requirements.txt
 
 # Runtime stage
