@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Set environment for pip
-ENV PIP_NO_CACHE_DIR=1
+ENV PIP_NO_CACHE_DIR=0
 ENV PIP_USER=0
 
 # Copy only requirements first (for better caching)
@@ -24,7 +24,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install numpy==1.26.4
 RUN pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
-RUN pip install opencv-python-headless Pillow python-dotenv ultralytics filterpy scipy open3d fastapi uvicorn sqlalchemy alembic pydantic pydantic-settings streamlit ffmpeg-python loguru orjson celery redis websockets python-jose passlib python-multipart slowapi pytest pytest-cov pytest-asyncio httpx prometheus-client
+RUN pip install -r requirements.txt
 
 # Runtime stage
 FROM python:3.11-slim-bookworm AS runtime
