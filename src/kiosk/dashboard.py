@@ -654,7 +654,7 @@ def render_live_video():
     <!DOCTYPE html>
     <html>
     <head>
-        <meta http-equiv="Permissions-Policy" content="ambient-light-sensor=(), battery=(), document-domain=(), layout-animations=(), legacy-image-formats=(), oversized-images=(), vr=(), wake-lock=()">
+        <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
         <style>
             body, html {{
                 margin: 0;
