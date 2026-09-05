@@ -1,4 +1,8 @@
 ```
+# Docker related
+.dockerenv
+Dockerfile.*
+
 # Dependencies
 __pycache__/
 *.pyc
