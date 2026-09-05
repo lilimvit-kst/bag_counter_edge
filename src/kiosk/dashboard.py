@@ -649,10 +649,12 @@ def render_live_video():
             return
     
     # Используем components.html для надежной работы JavaScript
+    # Добавляем sandbox с разрешениями для видео и fullscreen
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Permissions-Policy" content="ambient-light-sensor=(), battery=(), document-domain=(), layout-animations=(), legacy-image-formats=(), oversized-images=(), vr=(), wake-lock=()">
         <style>
             body, html {{
                 margin: 0;
