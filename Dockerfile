@@ -22,8 +22,12 @@ COPY requirements.txt .
 
 # Install dependencies in separate layers for better caching
 RUN pip install --upgrade pip
+# Install numpy and torch first (they are large and benefit most from caching)
 RUN pip install numpy==1.26.4
 RUN pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+# Install core web dependencies explicitly to ensure they're available
+RUN pip install fastapi>=0.111.0 uvicorn[standard]>=0.30.0
+# Install remaining requirements (opencv, utils, etc.)
 RUN pip install -r requirements.txt
 
 # Runtime stage
