@@ -1,13 +1,10 @@
 # Core
-numpy>=1.24.0,<2.0
 opencv-python>=4.8.0
 Pillow>=10.0.0
 python-dotenv>=1.0.0
 
 # CV / ML (CUDA 12.1 support for driver compatibility)
 --extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.2.0+cu121
-torchvision==0.17.0+cu121
 ultralytics>=8.2.0
 filterpy>=1.4.5
 scipy>=1.11.0

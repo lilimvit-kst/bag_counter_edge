@@ -4,19 +4,36 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
+.venv/
 venv/
 env/
-ENV/
-.venv/
 .env
 .env.*
-!.env.example
-!.env.sample
-!.env.local.example
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
+mypy_cache/
+.pytest_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
 .coverage
 .coverage.*
 .cache
