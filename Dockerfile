@@ -13,9 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Set numpy version before installing torch to avoid conflicts
+ENV PIP_NO_CACHE_DIR=1
+
 # Copy and install requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install numpy==1.26.4 --no-cache-dir && \
+    pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121 --no-cache-dir && \
+    pip install opencv-python-headless Pillow python-dotenv ultralytics filterpy scipy open3d fastapi uvicorn sqlalchemy alembic pydantic pydantic-settings streamlit ffmpeg-python loguru orjson celery redis websockets python-jose passlib python-multipart slowapi pytest pytest-cov pytest-asyncio httpx prometheus-client --no-cache-dir
 
 # Runtime stage
 FROM python:3.11-slim-bookworm AS runtime
@@ -34,6 +40,7 @@ WORKDIR /app
 
 # Copy installed packages from builder
 COPY --from=builder /root/.local /root/.local
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 ENV PATH=/root/.local/bin:$PATH
 
 # Copy source code
