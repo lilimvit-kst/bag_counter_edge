@@ -15,6 +15,7 @@ WORKDIR /app
 
 # Set numpy version before installing torch to avoid conflicts
 ENV PIP_NO_CACHE_DIR=1
+ENV PIP_USER=0
 
 # Copy and install requirements
 COPY requirements.txt .
@@ -39,9 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-ENV PATH=/root/.local/bin:$PATH
 
 # Copy source code
 COPY src/ ./src/

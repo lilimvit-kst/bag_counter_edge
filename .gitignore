@@ -4,43 +4,53 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.venv/
-venv/
+.Python
 env/
+venv/
+.venv/
 .env
+.env.local
 .env.*
-mypy_cache/
-.pytest_cache/
+.venv/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Build artifacts
-dist/
 build/
+dist/
+*.egg
 *.egg-info/
+.eggs/
+.installed.cfg
+*.egg-info/
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nyc_output/
+coverage-final.json
 
 # Logs
 *.log
 
-# Editor/IDE
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Icon?
+*/
+
+# Editor specific
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/modules/
-.DS_Store
+*~
 ```
