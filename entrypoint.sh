@@ -7,7 +7,7 @@ echo "Starting Bag Counter Edge services..."
 
 # Start FastAPI server in background
 echo "Starting FastAPI server on port 8000..."
-uvicorn src.api.app:app --host 0.0.0.0 --port 8000 &
+python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000 &
 FASTAPI_PID=$!
 
 # Wait for API server to be ready (max 10 seconds)

@@ -1,41 +1,61 @@
 # Optimized Docker image for Celery Workers
-# Based on python:3.10-slim for minimal size
+# Based on python:3.11-slim for consistency with other services
 
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm AS builder
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Set work directory
-WORKDIR /app
-
-# Install system dependencies (minimal set for worker)
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    curl \
+    gcc \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+WORKDIR /app
+
+# Set environment for pip
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_USER=0
+
+# Copy requirements first (for better caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Install dependencies in layers for better caching
+RUN pip install --upgrade pip
+RUN pip install numpy==1.26.4
+RUN pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+RUN pip install celery>=5.3.0 redis>=5.0.0
+RUN pip install -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim-bookworm AS runtime
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 
 # Copy project files (only what's needed for worker)
 COPY src/ ./src/
-COPY config.py .
-COPY celery_app.py .
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+# Set environment
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import celery; print('Celery worker healthy')" || exit 1
 
 # Run Celery Worker
-CMD ["celery", "-A", "celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+CMD ["celery", "-A", "src.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=4"]

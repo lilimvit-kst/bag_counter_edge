@@ -89,3 +89,14 @@ Thumbs.db
 # Project specific
 *.pth
 .pytype/
+
+# Storage (mounted as volumes, don't include in image)
+storage/
+
+# Models (mounted as volumes, don't include in image)
+models/*.pt
+models/*.onnx
+models/*.bin
+
+# Test artifacts
+tests/__pycache__/
