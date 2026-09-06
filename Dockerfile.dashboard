@@ -23,6 +23,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install numpy==1.26.4
 RUN pip install torch==2.2.0+cu121 torchvision==0.17.0+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+# Install all other dependencies in a single command
 RUN pip install --no-cache-dir \
     opencv-python-headless==4.8.1.78 \
     Pillow==10.2.0 \
@@ -48,10 +49,8 @@ RUN pip install --no-cache-dir \
     pytest-cov==4.1.0 \
     pytest-asyncio==0.23.3 \
     httpx==0.26.0 \
-    prometheus-client==0.19.0
-
-# Install streamlit separately to ensure it's available in PATH
-RUN pip install --no-cache-dir streamlit==1.31.0 && which streamlit
+    prometheus-client==0.19.0 \
+    streamlit==1.31.0
 
 # Runtime stage
 FROM python:3.11-slim-bookworm AS runtime
@@ -68,8 +67,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy installed packages from builder
+# Copy installed packages from builder (both site-packages and bin)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin/streamlit /usr/local/bin/streamlit
 
 # Copy source code
 COPY src/ ./src/
