@@ -503,7 +503,18 @@ def render_status_cards(db: Session):
     """Render status cards with current shift/wagon info."""
     shift = get_active_shift(db)
     wagon = get_active_wagon(db)
-    stats = get_stats(db, int(wagon.id) if wagon and hasattr(wagon, "id") and wagon.id is not None else None)
+    
+    # Safely extract wagon_id as a plain integer
+    wagon_id = None
+    if wagon is not None:
+        wid = getattr(wagon, "id", None)
+        if wid is not None:
+            try:
+                wagon_id = int(wid)
+            except (TypeError, ValueError):
+                wagon_id = None
+    
+    stats = get_stats(db, wagon_id)
     
     # Cache stats for comparison
     old_stats = st.session_state.stats_cache.copy()
