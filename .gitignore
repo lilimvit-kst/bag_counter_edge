@@ -4,50 +4,44 @@
 Dockerfile.*
 
 # Dependencies
+venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
-.env.local
-.env.*
 
 # Build artifacts
 dist/
-build/
 *.egg-info/
 
-# Virtual environments
-venv/
-.venv/
-env/
-.ENV/
+# Environment files
+.env
+.env.local
+*.env.*
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*.swp
-*~
-
-# Coverage reports
-.coverage
-htmlcov/
-.coverage.*
-.coverage.xml
-coverage.xml
-
-# IDE specific
+# Editor/IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# OS specific
+# OS files
 .DS_Store
 Thumbs.db
 
-# Docker related (if not already covered by .dockerignore)
-.dockerenv
+# Testing
+.coverage
+htmlcov/
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+
+# Docker (if not already in .dockerignore)
+Dockerfile*
+docker-compose.yml
 ```
