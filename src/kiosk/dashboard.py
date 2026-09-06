@@ -504,15 +504,13 @@ def render_status_cards(db: Session):
     shift = get_active_shift(db)
     wagon = get_active_wagon(db)
     
-    # Safely extract wagon_id as a plain integer
+    # Safely extract wagon_id as a plain Python int to avoid SQLAlchemy recursion
     wagon_id = None
     if wagon is not None:
-        wid = getattr(wagon, "id", None)
-        if wid is not None:
-            try:
-                wagon_id = int(wid)
-            except (TypeError, ValueError):
-                wagon_id = None
+        # Use object.__getattribute__ to bypass SQLAlchemy instrumentation
+        raw_id = object.__getattribute__(wagon, "id")
+        if raw_id is not None:
+            wagon_id = int(raw_id)
     
     stats = get_stats(db, wagon_id)
     
