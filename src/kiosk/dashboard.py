@@ -987,7 +987,7 @@ def main():
         pass  # Fallback for older Streamlit versions
     
     # Inject custom CSS
-    st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+    st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
     
     # Render sidebar
     render_sidebar()
