@@ -343,21 +343,21 @@ def get_db() -> Session:
 
 
 def get_active_shift(db: Session) -> Optional[Shift]:
-    return db.query(Shift).filter_by(is_active=True).first()
+    return db.query(Shift).filter(Shift.is_active == True).first()
 
 
 def get_active_wagon(db: Session) -> Optional[Wagon]:
-    return db.query(Wagon).filter_by(is_active=True).first()
+    return db.query(Wagon).filter(Wagon.is_active == True).first()
 
 
 def get_stats(db: Session, wagon_id: Optional[int] = None) -> dict:
     q = db.query(BagEvent)
-    if wagon_id:
-        q = q.filter_by(wagon_id=wagon_id)
+    if wagon_id is not None:
+        q = q.filter(BagEvent.wagon_id == wagon_id)
     total = q.count()
     by_class = {}
     for cls in BagClass:
-        by_class[cls.value] = q.filter_by(bag_class=cls).count()
+        by_class[cls.value] = q.filter(BagEvent.bag_class == cls).count()
     # Total estimated weight
     weight_25 = by_class.get("25kg", 0) * 25
     weight_50 = by_class.get("50kg", 0) * 50
@@ -878,7 +878,7 @@ def render_actions(db: Session):
                 return
             
             # Close any existing active wagon
-            existing = db.query(Wagon).filter_by(is_active=True).first()
+            existing = db.query(Wagon).filter(Wagon.is_active == True).first()
             if existing:
                 existing.is_active = False
                 existing.ended_at = datetime.now(timezone.utc)
