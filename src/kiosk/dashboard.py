@@ -369,15 +369,8 @@ def get_active_wagon(db: Session) -> Optional[Wagon]:
 def get_stats(db: Session, wagon_id: Optional[int] = None) -> dict:
     q = db.query(BagEvent)
     if wagon_id is not None:
-        # Ensure we're comparing with a plain Python int
-        # Convert to int explicitly to avoid any SQLAlchemy instrumentation issues
-        try:
-            plain_wagon_id = int(wagon_id)
-        except (TypeError, ValueError):
-            plain_wagon_id = None
-        
-        if plain_wagon_id is not None:
-            q = q.filter(BagEvent.wagon_id == plain_wagon_id)
+        # wagon_id is already a plain Python int, use it directly
+        q = q.filter(BagEvent.wagon_id == wagon_id)
     total = q.count()
     by_class = {}
     for cls in BagClass:
@@ -515,19 +508,13 @@ def render_status_cards(db: Session):
     # Safely extract wagon_id as a plain Python int to avoid SQLAlchemy recursion
     wagon_id = None
     if wagon is not None:
-        # Get the actual scalar value using SQLAlchemy's column access
-        # This bypasses any instrumentation issues
-        try:
-            # Access via the table column to get the raw value
-            wagon_id = int(wagon.id)
-        except (TypeError, ValueError, AttributeError, RecursionError):
-            # If that fails, try alternative methods
+        # Get raw integer value from SQLAlchemy instrumented attribute
+        # Access the underlying value directly from the instance dict
+        raw_val = wagon.__dict__.get('id')
+        if raw_val is not None:
             try:
-                # Try getting from instance dict
-                raw_id = wagon.__dict__.get('id')
-                if raw_id is not None:
-                    wagon_id = int(raw_id)
-            except Exception:
+                wagon_id = int(raw_val)
+            except (TypeError, ValueError):
                 wagon_id = None
     
     stats = get_stats(db, wagon_id)
