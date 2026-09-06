@@ -369,7 +369,9 @@ def get_active_wagon(db: Session) -> Optional[Wagon]:
 def get_stats(db: Session, wagon_id: Optional[int] = None) -> dict:
     q = db.query(BagEvent)
     if wagon_id is not None:
-        q = q.filter(BagEvent.wagon_id == wagon_id)
+        # Use literal() to ensure wagon_id is treated as a plain SQL value, not a SQLAlchemy expression
+        from sqlalchemy import literal
+        q = q.filter(BagEvent.wagon_id == literal(wagon_id))
     total = q.count()
     by_class = {}
     for cls in BagClass:
