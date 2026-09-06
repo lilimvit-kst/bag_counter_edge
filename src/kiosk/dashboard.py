@@ -49,6 +49,24 @@ st.set_page_config(
 
 # ── Custom CSS for Modern UI ─────────────────────────────────────────────────
 CUSTOM_CSS = """
+/* Prevent page title/tab flickering */
+[data-testid="stSidebar"] {
+    visibility: hidden;
+}
+
+/* Stabilize browser tab title */
+head > title {
+    position: absolute !important;
+}
+
+/* Hide default Streamlit header completely */
+[data-testid="stHeader"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
 <style>
 /* Global styles */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -487,7 +505,7 @@ def render_status_cards(db: Session):
     """Render status cards with current shift/wagon info."""
     shift = get_active_shift(db)
     wagon = get_active_wagon(db)
-    stats = get_stats(db, wagon.id if wagon else None)
+    stats = get_stats(db, int(wagon.id) if wagon and hasattr(wagon, "id") and wagon.id is not None else None)
     
     # Cache stats for comparison
     old_stats = st.session_state.stats_cache.copy()
