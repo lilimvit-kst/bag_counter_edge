@@ -369,9 +369,8 @@ def get_active_wagon(db: Session) -> Optional[Wagon]:
 def get_stats(db: Session, wagon_id: Optional[int] = None) -> dict:
     q = db.query(BagEvent)
     if wagon_id is not None:
-        # Convert to plain Python int to avoid SQLAlchemy instrumentation issues
-        plain_wagon_id = int(wagon_id)
-        q = q.filter(BagEvent.wagon_id == plain_wagon_id)
+        # wagon_id must be a plain Python int at this point
+        q = q.filter(BagEvent.wagon_id == wagon_id)
     total = q.count()
     by_class = {}
     for cls in BagClass:
@@ -509,8 +508,8 @@ def render_status_cards(db: Session):
     # Safely extract wagon_id as a plain Python int to avoid SQLAlchemy recursion
     wagon_id = None
     if wagon is not None:
-        # Use object.__getattribute__ to bypass SQLAlchemy instrumentation
-        raw_id = object.__getattribute__(wagon, "id")
+        # Access the underlying __dict__ to get the raw value, bypassing SQLAlchemy instrumentation
+        raw_id = wagon.__dict__.get('id')
         if raw_id is not None:
             wagon_id = int(raw_id)
     
