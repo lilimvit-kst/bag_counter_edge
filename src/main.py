@@ -109,6 +109,12 @@ class BagCountingPipeline:
         track.counted = True
 
         bag_class = self.volume_est.classify(track.volume_liters)
+        
+        # Save clip asynchronously / best-effort and get path
+        ts = time.time()
+        clip_path = self.clip_recorder.save_clip(ts)
+        logger.debug(f"Clip extraction started for track {track.id}")
+
         event = BagEvent(
             shift_id=self.current_shift.id if self.current_shift else None,
             wagon_id=self.current_wagon.id if self.current_wagon else None,
@@ -116,17 +122,13 @@ class BagCountingPipeline:
             counted_at=datetime.now(timezone.utc),
             bag_class=BagClass(bag_class),
             estimated_volume_liters=round(track.volume_liters, 2),
-            confidence=None,
+            confidence=track.detection_confidence,
             bbox_x1=float(track.bbox[0]),
             bbox_y1=float(track.bbox[1]),
             bbox_x2=float(track.bbox[2]),
             bbox_y2=float(track.bbox[3]),
+            clip_path=clip_path,
         )
-
-        # Save clip asynchronously / best-effort
-        ts = time.time()
-        self.clip_recorder.save_clip(ts)
-        logger.debug(f"Clip extraction started for track {track.id}")
 
         db = SessionLocal()
         try:
@@ -134,7 +136,7 @@ class BagCountingPipeline:
             db.commit()
             logger.success(
                 f"BAG COUNTED -> track={track.id}, class={bag_class}, "
-                f"vol={track.volume_liters:.1f}L"
+                f"vol={track.volume_liters:.1f}L, conf={track.detection_confidence:.2f}"
             )
         except Exception as e:
             logger.error(f"DB write failed: {e}")
