@@ -1,0 +1,45 @@
+schema: spec-driven
+
+context: |
+  Project: Bag Counter Edge, an on-premise edge computer-vision system for counting flour bags moving from a conveyor to a worker/wagon.
+  Runtime: Python 3.11-targeted codebase, OpenCV, NumPy, Ultralytics YOLO, SQLAlchemy/SQLite, FastAPI, Streamlit, Celery/Redis, FFmpeg, Prometheus/Grafana, Docker Compose.
+  Primary pipeline: camera capture -> bag detection -> persistent tracking -> volume/class estimation -> top-to-bottom tripwire crossing -> handover/disappearance confirmation -> event persistence and event clip creation.
+  Current detector contract: a fine-tuned Ultralytics model is loaded through src/pipeline/detector.py; inference is currently forced to CPU; only configured BAG_CLASS_IDS are accepted by the runtime detector.
+  Current tracker contract: src/pipeline/tracker.py is a custom greedy IoU tracker with a Kalman filter. It is NOT a production ByteTrack implementation despite README wording.
+  Current classification: runtime estimates apparent volume from bounding-box area when depth is disabled, then classifies into empty, 25kg, or 50kg thresholds.
+  Persistence: SQLite under storage/db; Shift, Wagon, and BagEvent are SQLAlchemy models. The pipeline auto-creates an active shift and wagon when none exist.
+  API: FastAPI exposes health, active wagon, aggregate stats, WebSocket channels, asynchronous task triggers, monitoring endpoints, and MJPEG video streaming.
+  Dashboard: Streamlit operator UI reads local DB/API and supports live status/video/event views.
+  Deployment: Docker Compose includes Redis, edge-cv, Celery worker, Celery beat, nginx, dashboard, and NVR; optional monitoring compose adds Prometheus and Grafana.
+  Training: current training helper is written for Ultralytics YOLOv8-style weights and YOLO-format datasets.
+  Safety of changes: counting correctness and prevention of duplicate counts are higher priority than raw detection throughput. Do not silently change the counting trigger, tripwire direction, track lifecycle, class mapping, DB event semantics, or stored evidence paths.
+  Brownfield rule: treat source code as the current implementation truth when README/documentation conflicts with code; record conflicts as technical debt rather than inventing behavior.
+  Environment: intended for local/on-premise edge deployment; preserve operation without cloud dependencies unless a change explicitly introduces one.
+  Tests: pytest. Add focused tests for behavior touched by each change; do not rely only on README claims.
+
+rules:
+  proposal:
+    - Identify which existing capability specs are affected and whether counting semantics can change.
+    - Call out migration, rollback, model-compatibility, database, and edge-hardware impacts when relevant.
+  specs:
+    - Describe externally verifiable behavior and contracts; keep implementation mechanics in design.md.
+    - Every requirement must have at least one Scenario using GIVEN/WHEN/THEN or WHEN/THEN form.
+    - Preserve current behavior unless the change explicitly declares and justifies a behavioral modification.
+  design:
+    - Trace changes through the CV path from frame acquisition to persisted BagEvent when relevant.
+    - For CV/model changes, document CPU/GPU assumptions, model artifact compatibility, thresholds, and failure/fallback behavior.
+    - For concurrency or background work, document ownership of resources and shutdown/error behavior.
+  tasks:
+    - Include focused automated tests and a manual camera/video verification step for counting-path changes.
+    - Keep tasks small enough to verify independently and include documentation/config updates when behavior changes.
+
+operations:
+  apply:
+    guidance:
+      - Run focused pytest tests for touched capabilities before broader checks.
+      - Never modify .env secrets or commit real credentials/tokens.
+      - Avoid broad refactors while applying a narrowly scoped behavioral change.
+  archive:
+    guidance:
+      - Sync final behavior into baseline specs before archiving.
+      - If implementation diverged from the approved spec, update the spec or document the deviation before archive.
