@@ -80,30 +80,35 @@ class ClipRecorder:
         self,
         event_ts: float,
         source_path: Optional[Path] = None,
-    ) -> Optional[Path]:
+    ) -> Optional[str]:
         """
         Extract clip around event_ts asynchronously.
         If source_path is None, uses direct FFmpeg from RTSP (fallback).
-        Returns immediately; clip is saved in background.
+        Returns the expected clip path immediately; clip is saved in background.
         """
-        future = self.executor.submit(
-            self._save_clip_sync, event_ts, source_path
-        )
-        self._pending_futures.append(future)
-        # Clean up completed futures
-        self._pending_futures = [f for f in self._pending_futures if not f.done()]
-        return None  # Async operation, path will be logged
-
-    def _save_clip_sync(
-        self,
-        event_ts: float,
-        source_path: Optional[Path] = None,
-    ) -> Optional[Path]:
-        """Synchronous clip extraction (called by executor)."""
+        # Generate the expected output path synchronously
         start = max(0.0, event_ts - self.pre)
         duration = self.pre + self.post
         stamp = datetime.fromtimestamp(event_ts, tz=timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         out_path = self.clips_dir / f"bag_event_{stamp}.mp4"
+        
+        future = self.executor.submit(
+            self._save_clip_sync, event_ts, source_path, out_path
+        )
+        self._pending_futures.append(future)
+        # Clean up completed futures
+        self._pending_futures = [f for f in self._pending_futures if not f.done()]
+        return str(out_path)  # Return path immediately for DB storage
+
+    def _save_clip_sync(
+        self,
+        event_ts: float,
+        source_path: Optional[Path],
+        out_path: Path,
+    ) -> Optional[Path]:
+        """Synchronous clip extraction (called by executor)."""
+        start = max(0.0, event_ts - self.pre)
+        duration = self.pre + self.post
 
         if source_path and source_path.exists():
             cmd = [

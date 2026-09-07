@@ -133,6 +133,7 @@ class Track:
     counted: bool = False
     volume_liters: float = 0.0
     bag_class: Optional[str] = None
+    detection_confidence: float = 0.0
     history: List[np.ndarray] = field(default_factory=list)
     kalman: Optional[SimpleKalmanFilter] = field(default=None, repr=False)
 
@@ -215,6 +216,7 @@ class BagTracker:
                 t.hits += 1
                 t.disappeared = 0
                 t.age = 0
+                t.detection_confidence = det.confidence
                 t.history.append(t.bbox.copy())
                 if len(t.history) > 30:
                     t.history.pop(0)
@@ -233,6 +235,7 @@ class BagTracker:
                 bbox=det.bbox.copy(),
                 last_seen=self.frame_count,
                 kalman=kalman,
+                detection_confidence=det.confidence,
             )
             self.tracks[self.next_id] = t
             self.next_id += 1
