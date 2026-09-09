@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     CELERY_ENABLED: bool = Field(default=False, env="CELERY_ENABLED")
     WEBSOCKET_ENABLED: bool = Field(default=True, env="WEBSOCKET_ENABLED")
     WEBSOCKET_PORT: int = 8765
+
+    DASHBOARD_SOURCE_ID: str = "primary"
+    DASHBOARD_TELEMETRY_TTL: int = Field(default=5, ge=2)
+    DASHBOARD_CAMERA_TIMEOUT: float = Field(default=5.0, gt=0)
+    DASHBOARD_PROCESSING_TIMEOUT: float = Field(default=15.0, gt=0)
     
     # Dashboard / API configuration (for kiosk service)
     API_HOST: str = Field(default="localhost", env="API_HOST")

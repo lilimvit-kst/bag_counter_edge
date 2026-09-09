@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Bag Counter</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-icon" aria-hidden="true">▥</span>
+          <div>Bag Counter<small>LOADING MONITOR</small></div>
+        </div>
+        <div class="header-center">
+          <span id="status" class="badge muted">Status unavailable</span
+          ><span id="connection" class="subtle">Connecting…</span>
+        </div>
+        <div class="clock">
+          <time id="clock">—</time><small id="date">Local computer time</small>
+        </div>
+      </header>
+      <main>
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow">OPERATIONS / LIVE OVERVIEW</p>
+            <h1>Loading overview</h1>
+          </div>
+          <div class="car-chip">
+            <span class="subtle">Current car</span
+            ><strong id="car-number">—</strong
+            ><button id="edit-car" class="quiet" disabled>
+              Edit number <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </section>
+        <div class="overview">
+          <section class="card count-card" aria-labelledby="count-title">
+            <div class="section-top">
+              <h2 id="count-title">Bags in current car</h2>
+              <span class="saved-label">Saved counts</span>
+            </div>
+            <div class="count-line">
+              <strong id="count">—</strong><span>bags</span>
+            </div>
+            <p id="count-context" class="subtle">Waiting for saved counts</p>
+            <div class="count-footer">
+              <div>
+                <span class="class-dot yellow"></span>25 kg
+                <strong id="class-25">—</strong>
+              </div>
+              <div>
+                <span class="class-dot teal"></span>50 kg
+                <strong id="class-50">—</strong>
+              </div>
+              <div>
+                <span class="class-dot grey"></span>Empty
+                <strong id="class-empty">—</strong>
+              </div>
+              <div class="weight">
+                Est. weight <strong id="weight">—</strong>
+              </div>
+            </div>
+          </section>
+          <section class="card equipment">
+            <div class="section-top">
+              <h2>Counting system</h2>
+              <span class="small-label">LIVE STATUS</span>
+            </div>
+            <div class="equipment-row">
+              <span>Camera</span
+              ><span id="camera-status" class="state muted">Unknown</span>
+            </div>
+            <div class="equipment-row">
+              <span>Detector</span
+              ><span id="detector-status" class="state muted">Unknown</span>
+            </div>
+            <div class="equipment-row">
+              <span>Tracker</span
+              ><span id="tracker-status" class="state muted">Unknown</span>
+            </div>
+            <p id="status-reason" class="subtle">Waiting for system status</p>
+          </section>
+          <section class="card last-bag">
+            <div class="section-top">
+              <h2>Last detected bag</h2>
+              <time id="detection-time" class="subtle">—</time>
+            </div>
+            <div class="detection-content">
+              <div class="thumbnail">
+                <img id="thumbnail" alt="Last detected bag" hidden /><span
+                  id="thumbnail-empty"
+                  >No image</span
+                >
+              </div>
+              <div>
+                <strong id="detection-class">No detection yet</strong>
+                <p id="detection-state" class="subtle">Waiting for a bag</p>
+                <span class="small-label">DETECTION ≠ SAVED COUNT</span>
+              </div>
+            </div>
+          </section>
+          <section class="card graph-card">
+            <div class="section-top">
+              <div>
+                <h2>Loading activity</h2>
+                <p class="subtle">Bags per minute · current car</p>
+              </div>
+              <span class="range-label">Last 30 min</span>
+            </div>
+            <div
+              id="chart"
+              role="img"
+              aria-label="No count history available"
+            ></div>
+            <div class="chart-footer">
+              <span><i class="class-dot teal"></i>Saved bags</span
+              ><span id="chart-total" class="subtle">—</span>
+            </div>
+          </section>
+          <section class="card video-card">
+            <div class="section-top">
+              <h2>Camera preview</h2>
+              <button id="expand-video" class="quiet">Expand ↗</button>
+            </div>
+            <div id="video-container" class="video-container">
+              <img id="video" alt="Live camera preview" hidden />
+              <div id="video-placeholder">
+                <span class="camera-icon" aria-hidden="true">▣</span
+                ><strong>Live camera preview</strong>
+                <p>View the loading area.</p>
+                <button id="start-video" class="primary">View camera</button>
+              </div>
+              <div class="preview-label" hidden id="preview-label">
+                LIVE PREVIEW
+              </div>
+            </div>
+          </section>
+          <section class="card events-card">
+            <div class="section-top">
+              <h2>Recent counts</h2>
+              <button id="history" class="quiet" disabled>
+                View history ↗
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Bag class</th>
+                    <th>Car</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="events">
+                  <tr>
+                    <td colspan="4" class="empty">No saved counts yet</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <section class="alert-strip" aria-live="polite">
+          <span id="alert-icon" aria-hidden="true">○</span>
+          <div>
+            <strong id="alert-title">Connecting to counting system</strong
+            ><span id="alert-detail">Status will appear when available.</span>
+          </div>
+          <button id="show-alerts" class="quiet">View details ↗</button>
+        </section>
+      </main>
+      <footer>
+        <span>LOCAL OPERATIONS</span
+        ><span id="updated">Waiting for first update</span>
+      </footer>
+    </div>
+    <dialog id="car-dialog">
+      <form id="car-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CURRENT CAR</p>
+            <h2>Edit car number</h2>
+          </div>
+          <button type="button" class="quiet close-dialog" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p class="subtle">
+          Correct the number of the car being filled. Saved bags stay with this
+          car.
+        </p>
+        <fieldset id="login-fields">
+          <legend>Operator login</legend>
+          <label
+            >Username<input
+              id="username"
+              autocomplete="username"
+              maxlength="128" /></label
+          ><label
+            >Password<input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              maxlength="256"
+          /></label>
+        </fieldset>
+        <label
+          >Car number<input
+            id="car-input"
+            required
+            maxlength="32"
+            autocomplete="off"
+            placeholder="Enter car number"
+        /></label>
+        <p id="car-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="quiet close-dialog">Cancel</button
+          ><button id="save-car" class="primary" type="submit">
+            Save number
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="history-dialog" class="wide-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">SAVED EVENTS</p>
+          <h2>Count history</h2>
+        </div>
+        <button class="quiet close-dialog" aria-label="Close">✕</button>
+      </div>
+      <p id="history-context" class="subtle"></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Bag class</th>
+            <th>Car</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="history-events"></tbody>
+      </table>
+      <p id="history-error" role="alert"></p>
+      <button id="more-history" class="quiet">Load more</button>
+    </dialog>
+    <dialog id="alerts-dialog" class="wide-dialog">
+      <div class="dialog-heading">
+        <h2>System messages</h2>
+        <button class="quiet close-dialog" aria-label="Close">✕</button>
+      </div>
+      <div id="alert-list"></div>
+    </dialog>
+  </body>
+</html>

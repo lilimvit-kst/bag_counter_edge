@@ -1,0 +1,4 @@
+# Add to the project's existing test dependencies; never install in runtime images.
+fakeredis>=2.23,<3
+playwright>=1.48,<2
+PyYAML>=6,<7

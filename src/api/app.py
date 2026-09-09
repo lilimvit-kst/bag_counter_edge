@@ -88,6 +88,11 @@ def health():
     return {"status": "ok"}
 
 
+# Dashboard-specific contracts are additive; legacy endpoints remain below.
+from src.dashboard.api import create_router
+app.include_router(create_router(get_current_user, slowapi_limiter))
+
+
 @app.get("/api/v1/wagons/active")
 def active_wagon(db: Session = Depends(get_db)):
     wagon = db.query(Wagon).filter_by(is_active=True).first()

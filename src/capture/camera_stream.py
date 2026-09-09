@@ -56,6 +56,7 @@ class CameraStream:
         self._lock = threading.Lock()
         self._reconnect_attempts = 0
         self._last_success_time: float = 0.0
+        self.last_frame_monotonic: float = 0.0
 
     def start(self) -> "CameraStream":
         logger.info(f"[{self.name}] Opening stream: {self.source}")
@@ -119,6 +120,7 @@ class CameraStream:
                     self._latest_frame = frame
                     self._timestamp = time.time()
                 self._last_success_time = time.time()
+                self.last_frame_monotonic = time.monotonic()
                 self._reconnect_attempts = 0
             else:
                 logger.warning(f"[{self.name}] Frame grab failed")

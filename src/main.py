@@ -25,6 +25,7 @@ from src.pipeline.handover_logic import HandoverLogic
 from src.nvr.clip_recorder import ClipRecorder
 from src.db.models import init_db, SessionLocal, BagEvent, BagClass, Wagon, Shift
 from src.notifications.notifier import NotificationService, build_report_from_wagon, WagonReport
+from src.dashboard.telemetry import RuntimePublisher
 
 
 class BagCountingPipeline:
@@ -38,10 +39,18 @@ class BagCountingPipeline:
 
         # Input
         self.camera = CameraStream(settings.PRIMARY_STREAM_URL, name="primary")
+        self.telemetry = RuntimePublisher(settings.REDIS_URL, settings.DASHBOARD_SOURCE_ID,
+                                          ttl=settings.DASHBOARD_TELEMETRY_TTL)
+        self.telemetry.start(lambda: self.camera.last_frame_monotonic)
         # If stereo depth needed, swap to StereoCapture()
 
         # CV modules
-        self.detector = BagDetector()
+        try:
+            self.detector = BagDetector()
+        except Exception:
+            self.telemetry.alert('startup')
+            self.telemetry.close('fault')
+            raise
         self.tracker = BagTracker()
         self.volume_est = VolumeEstimator(use_depth=False)
         self.tripwire = Tripwire(y_ratio=settings.TRIPWIRE_Y_RATIO)
@@ -133,7 +142,10 @@ class BagCountingPipeline:
         db = SessionLocal()
         try:
             db.add(event)
+            db.flush()
+            event_id = event.id
             db.commit()
+            self.telemetry.saved(track.id, event_id)
             logger.success(
                 f"BAG COUNTED -> track={track.id}, class={bag_class}, "
                 f"vol={track.volume_liters:.1f}L, conf={track.detection_confidence:.2f}"
@@ -141,6 +153,7 @@ class BagCountingPipeline:
         except Exception as e:
             logger.error(f"DB write failed: {e}")
             db.rollback()
+            self.telemetry.alert('persistence')
         finally:
             db.close()
 
@@ -172,8 +185,19 @@ class BagCountingPipeline:
             )
 
     def run(self) -> None:
+        try:
+            self._run()
+        except Exception:
+            self.telemetry.alert('processing')
+            self.telemetry.update(state='fault')
+            raise
+        finally:
+            self.shutdown()
+
+    def _run(self) -> None:
         self.running = True
         self.camera.start()
+        self.telemetry.update(state='running')
         
         # Check if running in headless mode (no display)
         use_gui = settings.USE_GUI and "DISPLAY" in os.environ
@@ -185,6 +209,8 @@ class BagCountingPipeline:
 
         while self.running:
             ok, frame, ts = self.camera.read()
+            camera_age = time.monotonic() - self.camera.last_frame_monotonic if self.camera.last_frame_monotonic else float('inf')
+            self.telemetry.alert('camera', camera_age > settings.DASHBOARD_CAMERA_TIMEOUT)
             if not ok or frame is None:
                 time.sleep(0.01)
                 continue
@@ -194,9 +220,12 @@ class BagCountingPipeline:
 
             # 1. Detect
             detections = self.detector.predict(frame)
+            self.telemetry.completed('detector')
 
             # 2. Track with Kalman filtering
             tracks = self.tracker.update(detections)
+            self.telemetry.completed('tracker')
+            self.telemetry.update(active_tracks=len(tracks))
 
             # 3. Volume + classify per track (once)
             for t in tracks:
@@ -211,6 +240,7 @@ class BagCountingPipeline:
                             break
 
             # 4. Tripwire + handover
+            self.telemetry.observe(frame, detections, tracks, ts)
             for t in tracks:
                 just_crossed, below = self.tripwire.check_crossing(t, h)
                 if just_crossed:
@@ -230,7 +260,6 @@ class BagCountingPipeline:
                 # Small sleep to prevent CPU spinning in headless mode
                 time.sleep(0.033)  # ~30 FPS limit
 
-        self.shutdown()
 
     def _iou(self, a: np.ndarray, b: np.ndarray) -> float:
         x1 = max(a[0], b[0]); y1 = max(a[1], b[1])
@@ -243,9 +272,15 @@ class BagCountingPipeline:
 
     def shutdown(self) -> None:
         logger.info("Shutting down pipeline...")
-        self.camera.stop()
-        self.clip_recorder.shutdown()
-        cv2.destroyAllWindows()
+        state = 'fault' if self.telemetry.data['state'] == 'fault' else 'stopped'
+        self.telemetry.update(state=state)
+        try:
+            self.camera.stop()
+            self.clip_recorder.shutdown()
+            cv2.destroyAllWindows()
+        finally:
+            # Pending network work must not delay camera or clip cleanup.
+            self.telemetry.close(state)
         logger.info("Pipeline shutdown complete.")
 
 

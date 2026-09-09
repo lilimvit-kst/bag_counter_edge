@@ -3,6 +3,11 @@
 
 set -e
 
+# Worker/beat (and maintenance commands) must execute their supplied role.
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
 echo "Starting Bag Counter Edge services..."
 
 # Start FastAPI server in background

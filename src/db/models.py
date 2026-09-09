@@ -63,6 +63,7 @@ class Wagon(Base):
     id = Column(Integer, primary_key=True, index=True)
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=False)
     wagon_number = Column(String(32), nullable=False)
+    revision = Column(Integer, nullable=False, default=0, server_default="0")
     started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     ended_at = Column(DateTime, nullable=True)
     target_weight_kg = Column(Float, nullable=True)
